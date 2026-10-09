@@ -1,0 +1,215 @@
+
+name: NBA Data Quality Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Audit NBA season coverage and player rows
+        shell: bash
+        run: |
+          cat > /tmp/nba_audit.py <<'PY'
+          import json
+          import time
+          import urllib.request
+          from datetime import date, timedelta
+          from collections import Counter
+
+          BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+          SEASON = 2026
+
+          def fetch(url):
+              for attempt in range(3):
+                  try:
+                      req = urllib.request.Request(url)
+                      with urllib.request.urlopen(req, timeout=25) as r:
+                          return json.load(r)
+                  except Exception as e:
+                      if attempt == 2:
+                          print("FETCH ERROR:", url, str(e))
+                          return None
+                      time.sleep(2 ** attempt)
+
+          def regular_completed(event):
+              if not event.get("status", {}).get("type", {}).get("completed"):
+                  return False
+              season = event.get("season", {})
+              return season.get("type") == 2
+
+          def get_events(url):
+              data = fetch(url)
+              if data is None:
+                  return None
+              return {
+                  str(e["id"]): e
+                  for e in data.get("events", [])
+                  if regular_completed(e)
+              }
+
+          months = [
+              "202510", "202511", "202512",
+              "202601", "202602", "202603", "202604"
+          ]
+
+          monthly = {}
+          print("===== MONTHLY DISCOVERY =====", flush=True)
+          for month in months:
+              url = (f"{BASE}/scoreboard?dates={month}"
+                     f"&season={SEASON}&seasontype=2&limit=200")
+              events = get_events(url)
+              if events is None:
+                  raise SystemExit("Monthly discovery failed: " + month)
+              monthly.update(events)
+              print(month, len(events), flush=True)
+
+          print("Monthly unique games:", len(monthly), flush=True)
+
+          # Independent daily discovery.
+          daily = {}
+          missing_days = []
+          start = date(2025, 10, 1)
+          end = date(2026, 4, 30)
+          current = start
+
+          print("\n===== DAILY DISCOVERY =====", flush=True)
+
+          while current <= end:
+              day = current.strftime("%Y%m%d")
+              url = (f"{BASE}/scoreboard?dates={day}"
+                     f"&season={SEASON}&seasontype=2&limit=50")
+              events = get_events(url)
+              if events is None:
+                  missing_days.append(day)
+              else:
+                  daily.update(events)
+              current += timedelta(days=1)
+              time.sleep(0.06)
+
+          only_daily = sorted(set(daily) - set(monthly))
+          only_monthly = sorted(set(monthly) - set(daily))
+
+          print("Daily unique games:", len(daily))
+          print("Daily fetch failures:", len(missing_days))
+          print("Only in daily:", len(only_daily))
+          print("Only in monthly:", len(only_monthly))
+
+          # Inspect rejected player rows across a small,
+          # reproducible sample of game summaries.
+          reasons = Counter()
+          examples = []
+          sample = sorted(monthly.values(),
+                          key=lambda e: e.get("date", ""))[:40]
+
+          print("\n===== PLAYER ROW AUDIT =====", flush=True)
+
+          for event in sample:
+              eid = str(event["id"])
+              data = fetch(f"{BASE}/summary?event={eid}")
+              if data is None:
+                  reasons["summary_fetch_failed"] += 1
+                  continue
+
+              for team in data.get("boxscore", {}).get("players", []):
+                  for group in team.get("statistics", []):
+                      labels = group.get("labels", [])
+                      for item in group.get("athletes", []):
+                          if item.get("didNotPlay"):
+                              continue
+
+                          athlete = item.get("athlete", {})
+                          values = item.get("stats", [])
+                          reason = None
+
+                          if not athlete.get("id"):
+                              reason = "missing_player_id"
+                          elif not values:
+                              reason = "empty_stats"
+                          elif len(labels) != len(values):
+                              reason = "label_value_mismatch"
+                          else:
+                              raw = dict(zip(labels, values))
+                              required = [
+                                  "PTS", "REB", "AST", "3PT", "MIN"
+                              ]
+                              absent = [
+                                  k for k in required if k not in raw
+                              ]
+                              if absent:
+                                  reason = "missing_" + "_".join(absent)
+                              else:
+                                  try:
+                                      for k in ["PTS", "REB", "AST"]:
+                                          float(raw[k])
+                                      float(str(raw["3PT"]).split("-")[0])
+                                      minutes = str(raw["MIN"])
+                                      if ":" in minutes:
+                                          a, b = minutes.split(":")
+                                          float(a)
+                                          float(b)
+                                      else:
+                                          float(minutes)
+                                  except (ValueError, TypeError):
+                                      reason = "unparseable_value"
+
+                          if reason:
+                              reasons[reason] += 1
+                              if len(examples) < 20:
+                                  examples.append({
+                                      "eventId": eid,
+                                      "player": athlete.get("displayName"),
+                                      "reason": reason,
+                                      "labels": labels,
+                                      "stats": values
+                                  })
+              time.sleep(0.1)
+
+          print("Games audited for player rows:", len(sample))
+          print("Rejection reasons:", dict(reasons))
+          print("Examples recorded:", len(examples))
+
+          result = {
+              "season": "2025-26",
+              "monthlyGames": len(monthly),
+              "dailyGames": len(daily),
+              "failedDailyDates": missing_days,
+              "onlyDailyEventIds": only_daily,
+              "onlyMonthlyEventIds": only_monthly,
+              "playerRowsSampledFromGames": len(sample),
+              "sampleRejectionReasons": dict(reasons),
+              "sampleRejectedRows": examples
+          }
+
+          with open("nba-data-quality-audit.json", "w") as f:
+              json.dump(result, f, indent=2)
+
+          print("\n===== AUDIT SUMMARY =====")
+          print("Monthly:", len(monthly))
+          print("Daily:", len(daily))
+          print("Missing daily dates:", len(missing_days))
+          print("Daily-only games:", len(only_daily))
+          print("Monthly-only games:", len(only_monthly))
+          print("Sample rejected rows:", sum(reasons.values()))
+
+          if missing_days:
+              raise SystemExit("AUDIT INCOMPLETE: Daily requests failed")
+
+          print("AUDIT COMPLETE - REVIEW DISCREPANCIES")
+          PY
+
+          python /tmp/nba_audit.py
+
+      - name: Upload NBA audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-data-quality-audit
+          path: nba-data-quality-audit.json
+          if-no-files-found: warn
