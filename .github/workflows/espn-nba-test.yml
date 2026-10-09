@@ -1,0 +1,131 @@
+
+name: ESPN NBA Connector Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-espn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Test ESPN NBA Data
+        shell: python
+        run: |
+          import json
+          import urllib.request
+          import urllib.error
+
+          BASE = (
+              "https://site.api.espn.com/apis/site/v2/"
+              "sports/basketball/nba"
+          )
+
+          def fetch(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "NBA-War-Room-Test/1.0",
+                      "Accept": "application/json"
+                  }
+              )
+              with urllib.request.urlopen(
+                  req, timeout=20
+              ) as response:
+                  return json.load(response)
+
+          results = {}
+
+          print("===== ESPN NBA CONNECTOR TEST =====")
+
+          # Test a completed historical NBA game.
+          try:
+              url = BASE + "/scoreboard?dates=20250605"
+              data = fetch(url)
+              events = data.get("events", [])
+
+              if not events:
+                  raise ValueError("No games returned")
+
+              event = events[0]
+              game_id = event["id"]
+
+              print("GREEN: ESPN SCOREBOARD")
+              print("GAME:", event.get("name"))
+              print("EVENT ID:", game_id)
+              results["Scoreboard"] = True
+
+          except Exception as error:
+              print("CHECK: ESPN SCOREBOARD")
+              print(type(error).__name__, str(error)[:200])
+              results["Scoreboard"] = False
+              game_id = None
+
+          # Test player box scores.
+          if game_id:
+              try:
+                  data = fetch(
+                      BASE + "/summary?event=" + game_id
+                  )
+
+                  boxscore = data.get("boxscore", {})
+                  teams = boxscore.get("players", [])
+
+                  player_count = 0
+                  found_fields = set()
+
+                  for team in teams:
+                      for group in team.get("statistics", []):
+                          labels = group.get("labels", [])
+                          found_fields.update(labels)
+
+                          for athlete in group.get(
+                              "athletes", []
+                          ):
+                              player_count += 1
+
+                  print("PLAYER RECORDS:", player_count)
+                  print(
+                      "STAT LABELS:",
+                      sorted(found_fields)
+                  )
+
+                  if player_count > 0 and found_fields:
+                      print("GREEN: ESPN PLAYER BOX SCORES")
+                      results["Player Box Scores"] = True
+                  else:
+                      print("CHECK: NO PLAYER STATS FOUND")
+                      results["Player Box Scores"] = False
+
+              except Exception as error:
+                  print("CHECK: ESPN PLAYER BOX SCORES")
+                  print(type(error).__name__, str(error)[:200])
+                  results["Player Box Scores"] = False
+
+          # Test injury endpoint availability.
+          try:
+              data = fetch(BASE + "/injuries")
+
+              if isinstance(data, dict):
+                  print("GREEN: ESPN INJURY ENDPOINT")
+                  print("RESPONSE KEYS:", list(data)[:10])
+                  results["Injuries Endpoint"] = True
+              else:
+                  print("CHECK: UNEXPECTED INJURY FORMAT")
+                  results["Injuries Endpoint"] = False
+
+          except Exception as error:
+              print("CHECK: ESPN INJURY ENDPOINT")
+              print(type(error).__name__, str(error)[:200])
+              results["Injuries Endpoint"] = False
+
+          print("\n===== FINAL ESPN REPORT =====")
+          for name, success in results.items():
+              status = "GREEN" if success else "CHECK"
+              print(f"{status}: {name}")
+
+          print("===== TEST COMPLETE =====")
