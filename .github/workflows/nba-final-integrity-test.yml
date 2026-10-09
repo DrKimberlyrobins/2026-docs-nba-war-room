@@ -1,0 +1,249 @@
+
+name: NBA Final Integrity Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Audit NBA regular season integrity
+        shell: bash
+        run: |
+          cat > /tmp/nba_integrity.py <<'PY'
+          import json
+          import time
+          import urllib.request
+          from collections import Counter
+          from datetime import date, timedelta
+
+          BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+          HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+          def fetch(url):
+              for attempt in range(4):
+                  try:
+                      req = urllib.request.Request(url, headers=HEADERS)
+                      with urllib.request.urlopen(req, timeout=25) as r:
+                          return json.load(r)
+                  except Exception as error:
+                      if attempt == 3:
+                          print("FETCH FAILED:", url, error, flush=True)
+                          return None
+                      time.sleep(2 ** attempt)
+
+          def completed_regular(event):
+              return (
+                  event.get("status", {}).get("type", {}).get("completed")
+                  and event.get("season", {}).get("type") == 2
+              )
+
+          events = {}
+          failed_dates = []
+          current = date(2025, 10, 1)
+          end = date(2026, 4, 30)
+
+          print("===== DAILY GAME DISCOVERY =====", flush=True)
+
+          while current <= end:
+              day = current.strftime("%Y%m%d")
+              url = (
+                  f"{BASE}/scoreboard?dates={day}"
+                  "&season=2026&seasontype=2&limit=50"
+              )
+              data = fetch(url)
+              if data is None:
+                  failed_dates.append(day)
+              else:
+                  for event in data.get("events", []):
+                      if completed_regular(event):
+                          events[str(event["id"])] = event
+              current += timedelta(days=1)
+              time.sleep(0.05)
+
+          print("Games discovered:", len(events), flush=True)
+          print("Failed dates:", len(failed_dates), flush=True)
+
+          if failed_dates:
+              raise SystemExit("Daily discovery incomplete")
+
+          # Standard NBA regular season is 1,230 games.
+          # Flag surplus events for investigation, not automatic removal.
+          unusual = []
+          for event in events.values():
+              competitions = event.get("competitions", [])
+              comp = competitions[0] if competitions else {}
+              notes = comp.get("notes", [])
+              text = json.dumps({
+                  "name": event.get("name"),
+                  "shortName": event.get("shortName"),
+                  "date": event.get("date"),
+                  "season": event.get("season"),
+                  "notes": notes,
+                  "type": event.get("type")
+              }).lower()
+
+              if any(term in text for term in [
+                  "cup", "tournament", "play-in", "all-star",
+                  "exhibition"
+              ]):
+                  unusual.append({
+                      "id": event["id"],
+                      "name": event.get("name"),
+                      "date": event.get("date"),
+                      "notes": notes
+                  })
+
+          print("Flagged unusual events:", len(unusual))
+
+          reasons = Counter()
+          rejected = []
+          processed = 0
+          valid_rows = 0
+          duplicates = []
+          seen = set()
+          failed_summaries = []
+
+          print("\n===== FULL PLAYER ROW AUDIT =====", flush=True)
+
+          ordered = sorted(
+              events.values(),
+              key=lambda e: e.get("date", "")
+          )
+
+          for index, event in enumerate(ordered, 1):
+              eid = str(event["id"])
+              data = fetch(f"{BASE}/summary?event={eid}")
+
+              if data is None:
+                  failed_summaries.append(eid)
+                  continue
+
+              processed += 1
+
+              for team in data.get("boxscore", {}).get("players", []):
+                  for group in team.get("statistics", []):
+                      labels = group.get("labels", [])
+
+                      for entry in group.get("athletes", []):
+                          if entry.get("didNotPlay"):
+                              continue
+
+                          athlete = entry.get("athlete", {})
+                          pid = str(athlete.get("id", ""))
+                          values = entry.get("stats", [])
+                          reason = None
+
+                          if not pid:
+                              reason = "missing_player_id"
+                          elif not values:
+                              reason = "empty_stats"
+                          elif len(labels) != len(values):
+                              reason = "label_value_mismatch"
+                          else:
+                              raw = dict(zip(labels, values))
+                              required = [
+                                  "PTS", "REB", "AST", "3PT", "MIN"
+                              ]
+                              missing = [
+                                  k for k in required if k not in raw
+                              ]
+
+                              if missing:
+                                  reason = "missing_fields"
+                              else:
+                                  try:
+                                      for key in ["PTS", "REB", "AST"]:
+                                          float(raw[key])
+                                      float(str(raw["3PT"]).split("-")[0])
+                                      minutes = str(raw["MIN"])
+                                      if ":" in minutes:
+                                          a, b = minutes.split(":")
+                                          float(a)
+                                          float(b)
+                                      else:
+                                          float(minutes)
+                                  except (ValueError, TypeError):
+                                      reason = "invalid_numeric_value"
+
+                          if reason:
+                              reasons[reason] += 1
+                              rejected.append({
+                                  "eventId": eid,
+                                  "player": athlete.get("displayName"),
+                                  "reason": reason,
+                                  "stats": values
+                              })
+                              continue
+
+                          key = (eid, pid)
+                          if key in seen:
+                              duplicates.append({
+                                  "eventId": eid,
+                                  "playerId": pid
+                              })
+                          else:
+                              seen.add(key)
+                              valid_rows += 1
+
+              if index % 100 == 0:
+                  print(
+                      "Audited:", index, "/", len(ordered),
+                      "| rejected:", len(rejected),
+                      "| duplicates:", len(duplicates),
+                      flush=True
+                  )
+              time.sleep(0.08)
+
+          report = {
+              "season": "2025-26",
+              "discoveredGames": len(events),
+              "processedSummaries": processed,
+              "failedDates": failed_dates,
+              "failedSummaries": failed_summaries,
+              "flaggedUnusualEvents": unusual,
+              "validPlayerRows": valid_rows,
+              "rejectedRowCount": len(rejected),
+              "rejectionReasons": dict(reasons),
+              "rejectedRows": rejected,
+              "duplicateRows": duplicates
+          }
+
+          with open("nba-final-integrity-test.json", "w") as f:
+              json.dump(report, f, indent=2)
+
+          print("\n===== FINAL INTEGRITY SUMMARY =====")
+          print("Discovered games:", len(events))
+          print("Processed summaries:", processed)
+          print("Failed summaries:", len(failed_summaries))
+          print("Flagged unusual events:", len(unusual))
+          print("Valid player rows:", valid_rows)
+          print("Rejected rows:", len(rejected))
+          print("Rejection reasons:", dict(reasons))
+          print("Duplicate rows:", len(duplicates))
+
+          if failed_summaries:
+              raise SystemExit("AUDIT INCOMPLETE: Summary failures")
+
+          if duplicates:
+              raise SystemExit("AUDIT WARNING: Duplicate player rows")
+
+          print("INTEGRITY AUDIT COMPLETE")
+          print("Review event count and rejected rows.")
+          PY
+
+          python /tmp/nba_integrity.py
+
+      - name: Upload integrity audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-final-integrity-test
+          path: nba-final-integrity-test.json
+          if-no-files-found: warn
