@@ -1,0 +1,282 @@
+{
+  "generatedAt": "2026-10-09T23:16:11.237756+00:00",
+  "season": "2025-26",
+  "espnSeason": 2026,
+  "seasonType": "regular",
+  "source": "ESPN",
+  "dataStatus": "PROVISIONAL",
+  "bettingQualificationEnabled": false,
+  "gamesDiscovered": 1235,
+  "gamesProcessed": 1235,
+  "failedSummaries": [],
+  "playerRecords": 26708,
+  "uniquePlayers": 582,
+  "playersWithLast5": 550,
+  "playersWithLast10": 506,
+  "rejectedRows": 35,
+  "rejectionReasons": {
+    "missing_player_id": 22,
+    "invalid_numeric_value": 13
+  },
+  "rejectedRowDetails": [
+    {
+      "eventId": "401810150",
+      "date": "2025-11-30T00:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810169",
+      "date": "2025-12-02T00:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810184",
+      "date": "2025-12-04T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810200",
+      "date": "2025-12-06T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810216",
+      "date": "2025-12-08T00:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810358",
+      "date": "2026-01-06T00:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810372",
+      "date": "2026-01-08T00:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810401",
+      "date": "2026-01-11T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810423",
+      "date": "2026-01-14T01:00Z",
+      "player": "Kelly Olynyk",
+      "team": "San Antonio Spurs",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810428",
+      "date": "2026-01-15T01:00Z",
+      "player": "Trentyn Flowers",
+      "team": "Chicago Bulls",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810458",
+      "date": "2026-01-19T00:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810469",
+      "date": "2026-01-21T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810496",
+      "date": "2026-01-24T01:00Z",
+      "player": "Tony Bradley",
+      "team": "Indiana Pacers",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810503",
+      "date": "2026-01-25T01:30Z",
+      "player": "Kobe Bufkin",
+      "team": "Los Angeles Lakers",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810516",
+      "date": "2026-01-27T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810550",
+      "date": "2026-01-31T02:00Z",
+      "player": "Patrick Baldwin Jr.",
+      "team": "LA Clippers",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810547",
+      "date": "2026-02-01T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810560",
+      "date": "2026-02-01T23:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810577",
+      "date": "2026-02-04T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810583",
+      "date": "2026-02-05T01:00Z",
+      "player": "Nikola Vucevic",
+      "team": "Boston Celtics",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810585",
+      "date": "2026-02-05T02:30Z",
+      "player": "Jared McCain",
+      "team": "Oklahoma City Thunder",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810591",
+      "date": "2026-02-06T00:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810607",
+      "date": "2026-02-08T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810624",
+      "date": "2026-02-10T03:00Z",
+      "player": "Chris Youngblood",
+      "team": "Oklahoma City Thunder",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810633",
+      "date": "2026-02-12T00:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810691",
+      "date": "2026-02-25T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810717",
+      "date": "2026-02-28T02:47Z",
+      "player": "Zeke Nnaji",
+      "team": "Denver Nuggets",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810725",
+      "date": "2026-03-01T20:30Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810729",
+      "date": "2026-03-02T01:00Z",
+      "player": "Dalano Banton",
+      "team": "Boston Celtics",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810744",
+      "date": "2026-03-04T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810760",
+      "date": "2026-03-06T02:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810785",
+      "date": "2026-03-09T01:00Z",
+      "player": "",
+      "team": "Chicago Bulls",
+      "reason": "missing_player_id"
+    },
+    {
+      "eventId": "401810837",
+      "date": "2026-03-16T02:00Z",
+      "player": "Mo Bamba",
+      "team": "Utah Jazz",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401810996",
+      "date": "2026-04-06T01:00Z",
+      "player": "DaQuan Jeffries",
+      "team": "Sacramento Kings",
+      "reason": "invalid_numeric_value"
+    },
+    {
+      "eventId": "401811009",
+      "date": "2026-04-08T02:00Z",
+      "player": "Omer Yurtseven",
+      "team": "Golden State Warriors",
+      "reason": "invalid_numeric_value"
+    }
+  ],
+  "duplicatePlayerRows": [],
+  "incompleteTeamGames": [
+    "401838140",
+    "401838141",
+    "401838142",
+    "401838143"
+  ],
+  "unresolvedChecks": [
+    "Reconcile discovered event count",
+    "Review rejected player rows",
+    "Validate player averages",
+    "Validate team scoring against box scores",
+    "Backtest projections before qualification"
+  ]
+}
