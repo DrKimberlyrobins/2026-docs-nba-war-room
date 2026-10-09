@@ -35,8 +35,14 @@ jobs:
                   with urllib.request.urlopen(
                       request, timeout=30
                   ) as response:
-                      payload = json.load(response)
-                      data = payload.get("data", payload)
+                      
+payload = json.load(response)
+
+if isinstance(payload, dict):
+    data = payload.get("data", payload)
+else:
+    data = payload
+
 
                       print("STATUS: CONNECTED")
                       print("HTTP:", response.status)
