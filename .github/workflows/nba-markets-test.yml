@@ -1,0 +1,213 @@
+
+name: NBA Betting Markets Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-markets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Test NBA Betting Markets
+        shell: python
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          import os
+          import json
+          import urllib.request
+          import urllib.error
+          import urllib.parse
+
+          BASE = (
+              "https://api.the-odds-api.com/v4/"
+              "sports/basketball_nba"
+          )
+
+          KEY = os.environ.get("ODDS_API_KEY")
+
+          def fetch(path, params):
+              query = urllib.parse.urlencode(params)
+              url = BASE + path + "?" + query
+
+              request = urllib.request.Request(url)
+
+              try:
+                  with urllib.request.urlopen(
+                      request, timeout=25
+                  ) as response:
+                      data = json.load(response)
+                      remaining = response.headers.get(
+                          "x-requests-remaining", "unknown"
+                      )
+                      print(
+                          "API CREDITS REMAINING:",
+                          remaining
+                      )
+                      return data
+
+              except urllib.error.HTTPError as error:
+                  print("HTTP ERROR:", error.code)
+                  print(
+                      "DETAIL:",
+                      error.read().decode(
+                          "utf-8", errors="replace"
+                      )[:300]
+                  )
+                  return None
+
+              except Exception as error:
+                  print(
+                      "CONNECTION ERROR:",
+                      type(error).__name__
+                  )
+                  return None
+
+          print("===== NBA MARKET TEST =====")
+
+          if not KEY:
+              raise RuntimeError(
+                  "ODDS_API_KEY secret missing"
+              )
+
+          common = {
+              "apiKey": KEY,
+              "regions": "us",
+              "oddsFormat": "american"
+          }
+
+          # Test full-game markets.
+          full = fetch(
+              "/odds/",
+              {
+                  **common,
+                  "markets": "h2h,spreads,totals"
+              }
+          )
+
+          results = {}
+
+          if isinstance(full, list):
+              print("NBA EVENTS:", len(full))
+
+              for market in [
+                  "h2h", "spreads", "totals"
+              ]:
+                  count = sum(
+                      1
+                      for event in full
+                      for book in event.get(
+                          "bookmakers", []
+                      )
+                      for item in book.get(
+                          "markets", []
+                      )
+                      if item.get("key") == market
+                  )
+
+                  results[market] = count
+                  print(
+                      market, "BOOK MARKETS:", count
+                  )
+          else:
+              print("CHECK: Full-game markets")
+              full = []
+
+          # Select one event for additional markets.
+          event = next(
+              (
+                  e for e in full
+                  if e.get("id")
+              ),
+              None
+          )
+
+          if event is None:
+              print("CHECK: No NBA event available")
+              print("===== TEST COMPLETE =====")
+              raise SystemExit(0)
+
+          print(
+              "\nTEST EVENT:",
+              event.get("away_team"),
+              "at",
+              event.get("home_team")
+          )
+
+          print(
+              "START:",
+              event.get("commence_time")
+          )
+
+          extra_markets = [
+              "team_totals",
+              "spreads_q1",
+              "totals_q1",
+              "spreads_h1",
+              "totals_h1",
+              "player_points",
+              "player_rebounds",
+              "player_assists",
+              "player_threes",
+              "player_points_rebounds_assists"
+          ]
+
+          print("\n===== EVENT MARKET TEST =====")
+
+          extra = fetch(
+              "/events/" + event["id"] + "/odds",
+              {
+                  **common,
+                  "markets": ",".join(extra_markets)
+              }
+          )
+
+          if isinstance(extra, dict):
+              for market in extra_markets:
+                  count = sum(
+                      1
+                      for book in extra.get(
+                          "bookmakers", []
+                      )
+                      for item in book.get(
+                          "markets", []
+                      )
+                      if item.get("key") == market
+                  )
+
+                  results[market] = count
+
+                  status = (
+                      "GREEN" if count > 0
+                      else "CHECK"
+                  )
+
+                  print(
+                      status,
+                      market,
+                      "BOOK MARKETS:",
+                      count
+                  )
+          else:
+              print(
+                  "CHECK: Additional markets unavailable"
+              )
+
+          print("\n===== FINAL MARKET REPORT =====")
+
+          for market, count in results.items():
+              status = (
+                  "GREEN" if count > 0
+                  else "CHECK"
+              )
+              print(
+                  status, market,
+                  "|", count
+              )
+
+          print("===== TEST COMPLETE =====")
