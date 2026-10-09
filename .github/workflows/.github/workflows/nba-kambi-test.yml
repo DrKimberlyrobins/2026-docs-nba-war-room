@@ -1,0 +1,294 @@
+
+name: NBA Kambi Connection Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-kambi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Test NBA Kambi Markets
+        shell: python
+        run: |
+          import json
+          import urllib.request
+          import urllib.error
+          import urllib.parse
+
+          OFFERING = "pivusmsrl-bil"
+          MARKET = "US-MS"
+          LANGUAGE = "en_US"
+
+          KAMBI = (
+              "https://eu.offering-api.kambicdn.com"
+              "/offering/v2018"
+          )
+
+          SHAPE = (
+              "https://offering.sbo.fra-hub."
+              "workload.shapegamescloud.com"
+          )
+
+          COMMON = {
+              "lang": LANGUAGE,
+              "market": MARKET,
+              "client_id": "200",
+              "channel_id": "7"
+          }
+
+          def fetch(label, url):
+              print("\nTEST:", label)
+
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/json",
+                      "User-Agent": "Mozilla/5.0"
+                  }
+              )
+
+              try:
+                  with urllib.request.urlopen(
+                      request, timeout=20
+                  ) as response:
+                      data = json.load(response)
+
+                      print("HTTP:", response.status)
+                      print("JSON TYPE:", type(data).__name__)
+
+                      return data
+
+              except urllib.error.HTTPError as error:
+                  print("HTTP:", error.code)
+                  print(
+                      "DETAIL:",
+                      error.read().decode(
+                          "utf-8", errors="replace"
+                      )[:200]
+                  )
+
+              except Exception as error:
+                  print(
+                      "ERROR:",
+                      type(error).__name__,
+                      str(error)[:200]
+                  )
+
+              return None
+
+          def make_url(base, params):
+              return (
+                  base + "?"
+                  + urllib.parse.urlencode(params)
+              )
+
+          print("===== NBA KAMBI CONNECTION TEST =====")
+
+          # Test NBA event discovery.
+          matches_url = make_url(
+              KAMBI
+              + f"/{OFFERING}"
+              + "/listView/basketball/nba/all/all/"
+              + "matches.json",
+              {
+                  **COMMON,
+                  "useCombined": "true",
+                  "useCombinedLive": "true"
+              }
+          )
+
+          matches = fetch(
+              "NBA MATCH DISCOVERY",
+              matches_url
+          )
+
+          events = []
+
+          if isinstance(matches, dict):
+              for wrapper in matches.get("events", []):
+                  if not isinstance(wrapper, dict):
+                      continue
+
+                  event = wrapper.get("event")
+
+                  if not isinstance(event, dict):
+                      continue
+
+                  event_id = event.get("id")
+
+                  if event_id is None:
+                      continue
+
+                  events.append({
+                      "id": str(event_id),
+                      "name": event.get("name", ""),
+                      "start": event.get("start", "")
+                  })
+
+          unique = {
+              event["id"]: event
+              for event in events
+          }
+
+          events = list(unique.values())
+
+          print("\nNBA EVENTS DISCOVERED:", len(events))
+
+          for event in events[:10]:
+              print(
+                  event["id"],
+                  "|",
+                  event["name"],
+                  "|",
+                  event["start"]
+              )
+
+          if not events:
+              print(
+                  "\nCHECK: No NBA events discovered."
+              )
+              print(
+                  "This does not prove NBA markets "
+                  "are unavailable from all Kambi offerings."
+              )
+              print(
+                  "===== FINAL KAMBI REPORT ====="
+              )
+              print("EVENTS: 0")
+              print("BET OFFERS: NOT TESTED")
+              print("PLAYER PROPS: NOT TESTED")
+              print("RESULT: CHECK")
+              raise SystemExit(0)
+
+          # Use the discovered event ID.
+          event = events[0]
+          event_id = event["id"]
+
+          print("\nSELECTED GAME:", event["name"])
+          print("EVENT ID:", event_id)
+
+          offers_url = make_url(
+              KAMBI
+              + f"/{OFFERING}"
+              + f"/betoffer/event/{event_id}.json",
+              {
+                  **COMMON,
+                  "includeParticipants": "true"
+              }
+          )
+
+          offers = fetch(
+              "NBA BET OFFERS",
+              offers_url
+          )
+
+          bet_offers = []
+
+          if isinstance(offers, dict):
+              bet_offers = offers.get(
+                  "betOffers", []
+              )
+
+          if not isinstance(bet_offers, list):
+              bet_offers = []
+
+          print("\nBET OFFERS:", len(bet_offers))
+
+          market_names = []
+
+          for offer in bet_offers:
+              criterion = offer.get(
+                  "criterion", {}
+              )
+
+              label = (
+                  criterion.get("label")
+                  or criterion.get("englishLabel")
+                  or ""
+              )
+
+              if label:
+                  market_names.append(str(label))
+
+          print("\nSAMPLE MARKET LABELS:")
+
+          for label in list(
+              dict.fromkeys(market_names)
+          )[:30]:
+              print("MARKET:", label)
+
+          # Test the same Shape Games structure
+          # used in the NFL collector.
+          props_url = make_url(
+              SHAPE
+              + f"/{OFFERING}"
+              + f"/api/events/{event_id}/player_props",
+              {
+                  "market": MARKET,
+                  "lang": LANGUAGE
+              }
+          )
+
+          props = fetch(
+              "NBA PLAYER PROPS",
+              props_url
+          )
+
+          categories = []
+
+          if isinstance(props, dict):
+              categories = props.get(
+                  "player_props", []
+              )
+
+          if not isinstance(categories, list):
+              categories = []
+
+          print(
+              "\nPLAYER PROP CATEGORIES:",
+              len(categories)
+          )
+
+          # Show category structure without
+          # guessing how player references map.
+          for category in categories[:3]:
+              print(
+                  "CATEGORY TOP-LEVEL KEYS:",
+                  list(category.keys())
+                  if isinstance(category, dict)
+                  else type(category).__name__
+              )
+
+          print("\n===== FINAL KAMBI REPORT =====")
+          print("EVENTS:", len(events))
+          print("BET OFFERS:", len(bet_offers))
+          print("MARKET LABELS:", len(market_names))
+          print(
+              "PLAYER PROP CATEGORIES:",
+              len(categories)
+          )
+
+          if bet_offers and categories:
+              print(
+                  "RESULT: GREEN - BOTH ENDPOINTS"
+              )
+          elif bet_offers:
+              print(
+                  "RESULT: PARTIAL - BET OFFERS ONLY"
+              )
+          elif categories:
+              print(
+                  "RESULT: PARTIAL - PLAYER PROPS ONLY"
+              )
+          else:
+              print(
+                  "RESULT: CHECK - NO MARKET DATA"
+              )
+
+          print("===== TEST COMPLETE =====")
