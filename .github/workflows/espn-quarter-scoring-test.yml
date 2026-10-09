@@ -1,0 +1,254 @@
+
+name: ESPN NBA Quarter Scoring Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-quarter-scoring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Test NBA Quarter Scoring Data
+        shell: python
+        run: |
+          import json
+          import time
+          import urllib.request
+
+          BASE = (
+              "https://site.api.espn.com/apis/site/v2/"
+              "sports/basketball/nba"
+          )
+
+          DATES = [
+              "20250605",
+              "20250608",
+              "20250611"
+          ]
+
+          def fetch(url):
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/json",
+                      "User-Agent": "Mozilla/5.0"
+                  }
+              )
+
+              with urllib.request.urlopen(
+                  request, timeout=20
+              ) as response:
+                  return json.load(response)
+
+          def period_scores(competitor):
+              lines = competitor.get("linescores", [])
+
+              scores = []
+
+              for item in lines:
+                  value = item.get(
+                      "value",
+                      item.get("displayValue")
+                  )
+
+                  try:
+                      scores.append(int(float(value)))
+                  except (ValueError, TypeError):
+                      return None
+
+              if len(scores) < 4:
+                  return None
+
+              return scores
+
+          records = []
+          failures = []
+
+          print(
+              "===== NBA QUARTER SCORING TEST ====="
+          )
+
+          for day in DATES:
+              try:
+                  board = fetch(
+                      BASE + "/scoreboard?dates=" + day
+                  )
+
+                  for event in board.get("events", []):
+                      status = (
+                          event.get("status", {})
+                          .get("type", {})
+                          .get("name")
+                      )
+
+                      if status != "STATUS_FINAL":
+                          continue
+
+                      competition = event.get(
+                          "competitions", [{}]
+                      )[0]
+
+                      competitors = competition.get(
+                          "competitors", []
+                      )
+
+                      if len(competitors) != 2:
+                          failures.append(
+                              f"{day}: missing competitors"
+                          )
+                          continue
+
+                      game_records = []
+
+                      for team in competitors:
+                          scores = period_scores(team)
+
+                          if scores is None:
+                              failures.append(
+                                  f"{day}: missing quarters"
+                              )
+                              continue
+
+                          final_score = int(
+                              float(team.get("score", 0))
+                          )
+
+                          q1 = scores[0]
+                          q2 = scores[1]
+                          q3 = scores[2]
+                          q4 = scores[3]
+
+                          first_half = q1 + q2
+                          regulation = sum(scores[:4])
+                          total_periods = sum(scores)
+
+                          if total_periods != final_score:
+                              failures.append(
+                                  f"{day}: score mismatch"
+                              )
+                              continue
+
+                          record = {
+                              "date": day,
+                              "game_id": event.get("id"),
+                              "team": team.get(
+                                  "team", {}
+                              ).get("displayName"),
+                              "home_away": team.get(
+                                  "homeAway"
+                              ),
+                              "q1": q1,
+                              "q2": q2,
+                              "q3": q3,
+                              "q4": q4,
+                              "first_half": first_half,
+                              "regulation": regulation,
+                              "final": final_score,
+                              "overtime": len(scores) > 4
+                          }
+
+                          game_records.append(record)
+
+                      if len(game_records) != 2:
+                          failures.append(
+                              f"{day}: incomplete game"
+                          )
+                          continue
+
+                      a, b = game_records
+
+                      a["q1_allowed"] = b["q1"]
+                      b["q1_allowed"] = a["q1"]
+
+                      a["first_half_allowed"] = (
+                          b["first_half"]
+                      )
+
+                      b["first_half_allowed"] = (
+                          a["first_half"]
+                      )
+
+                      a["final_allowed"] = b["final"]
+                      b["final_allowed"] = a["final"]
+
+                      records.extend(game_records)
+
+                      print(
+                          "\nGAME:",
+                          event.get("name")
+                      )
+
+                      for r in game_records:
+                          print(
+                              r["team"],
+                              "|", r["home_away"],
+                              "| 1Q:", r["q1"],
+                              "| 1H:", r["first_half"],
+                              "| FINAL:", r["final"],
+                              "| OT:", r["overtime"]
+                          )
+
+                      time.sleep(1)
+
+              except Exception as error:
+                  failures.append(
+                      f"{day}: {type(error).__name__}"
+                  )
+
+                  print(
+                      "CHECK:", day,
+                      type(error).__name__,
+                      str(error)[:150]
+                  )
+
+          print(
+              "\n===== FINAL QUARTER REPORT ====="
+          )
+
+          games = len(records) // 2
+
+          print("GAMES:", games)
+          print("TEAM RECORDS:", len(records))
+          print("FAILURES:", failures)
+
+          required = [
+              "q1",
+              "first_half",
+              "final",
+              "q1_allowed",
+              "first_half_allowed",
+              "final_allowed"
+          ]
+
+          complete = sum(
+              all(
+                  isinstance(r.get(key), int)
+                  for key in required
+              )
+              for r in records
+          )
+
+          print(
+              "COMPLETE TEAM RECORDS:",
+              complete
+          )
+
+          if (
+              games == 3
+              and complete == 6
+              and not failures
+          ):
+              print(
+                  "GREEN: QUARTER SCORING DATA"
+              )
+          else:
+              print(
+                  "CHECK: QUARTER DATA INCOMPLETE"
+              )
+
+          print("===== TEST COMPLETE =====")
