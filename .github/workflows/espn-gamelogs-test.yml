@@ -1,0 +1,164 @@
+
+name: ESPN NBA Game Logs Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-game-logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Test Multi-Game Player Statistics
+        shell: python
+        run: |
+          import json
+          import time
+          import urllib.request
+
+          BASE = (
+              "https://site.api.espn.com/apis/site/v2/"
+              "sports/basketball/nba"
+          )
+
+          # Three historical NBA Finals dates.
+          DATES = [
+              "20250605",
+              "20250608",
+              "20250611"
+          ]
+
+          def fetch(url):
+              request = urllib.request.Request(
+                  url,
+                  headers={"Accept": "application/json"}
+              )
+              with urllib.request.urlopen(
+                  request, timeout=20
+              ) as response:
+                  return json.load(response)
+
+          print("===== NBA GAME LOG TEST =====")
+
+          games = 0
+          records = []
+          failures = []
+
+          for day in DATES:
+              try:
+                  scoreboard = fetch(
+                      BASE + "/scoreboard?dates=" + day
+                  )
+
+                  for event in scoreboard.get("events", []):
+                      if (
+                          event.get("status", {})
+                          .get("type", {})
+                          .get("name") != "STATUS_FINAL"
+                      ):
+                          continue
+
+                      game_id = event["id"]
+                      summary = fetch(
+                          BASE + "/summary?event=" + game_id
+                      )
+
+                      count = 0
+
+                      for team in summary.get(
+                          "boxscore", {}
+                      ).get("players", []):
+                          team_name = (
+                              team.get("team", {})
+                              .get("displayName", "")
+                          )
+
+                          for group in team.get(
+                              "statistics", []
+                          ):
+                              labels = group.get("labels", [])
+
+                              for item in group.get(
+                                  "athletes", []
+                              ):
+                                  stats = item.get(
+                                      "stats", []
+                                  )
+
+                                  if len(stats) != len(labels):
+                                      continue
+
+                                  values = dict(zip(labels, stats))
+                                  athlete = item.get(
+                                      "athlete", {}
+                                  )
+
+                                  records.append({
+                                      "game": game_id,
+                                      "date": day,
+                                      "team": team_name,
+                                      "player_id": athlete.get("id"),
+                                      "player": athlete.get(
+                                          "displayName"
+                                      ),
+                                      "MIN": values.get("MIN"),
+                                      "PTS": values.get("PTS"),
+                                      "REB": values.get("REB"),
+                                      "AST": values.get("AST"),
+                                      "3PT": values.get("3PT")
+                                  })
+                                  count += 1
+
+                      if count:
+                          games += 1
+
+                      print(
+                          "GAME:", event.get("name"),
+                          "| PLAYER RECORDS:", count
+                      )
+
+                      if not count:
+                          failures.append(
+                              f"{day}: no player records"
+                          )
+
+                      time.sleep(1)
+
+              except Exception as error:
+                  failures.append(
+                      f"{day}: {type(error).__name__}"
+                  )
+                  print(
+                      "CHECK:", day,
+                      type(error).__name__
+                  )
+
+          unique_players = {
+              r["player_id"] or r["player"]
+              for r in records
+          }
+
+          print("\n===== FINAL GAME LOG REPORT =====")
+          print("GAMES:", games)
+          print("PLAYER GAME RECORDS:", len(records))
+          print("UNIQUE PLAYERS:", len(unique_players))
+          print("FAILURES:", failures)
+
+          required = ["MIN", "PTS", "REB", "AST", "3PT"]
+          complete = sum(
+              all(r.get(k) not in (None, "") for k in required)
+              for r in records
+          )
+
+          print("COMPLETE STAT RECORDS:", complete)
+
+          if games >= 3 and complete > 0 and not failures:
+              print("GREEN: MULTI-GAME PLAYER DATA")
+          else:
+              print("CHECK: DATA COVERAGE INCOMPLETE")
+
+          print("===== TEST COMPLETE =====")
