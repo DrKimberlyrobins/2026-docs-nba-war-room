@@ -1,0 +1,297 @@
+
+name: NBA Full Regular Season Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect-regular-season:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Collect complete NBA regular season history
+        shell: bash
+        run: |
+          cat > /tmp/nba_full_season.py <<'PY'
+          import json
+          import time
+          import urllib.request
+          from collections import defaultdict
+          from datetime import datetime, timezone
+
+          BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+          HEADERS = {"User-Agent": "Mozilla/5.0"}
+          SEASON = 2026
+          MONTHS = [
+              "202510", "202511", "202512",
+              "202601", "202602", "202603", "202604"
+          ]
+          FIELDS = ["points", "rebounds", "assists", "threes", "minutes"]
+
+          def fetch(url):
+              for attempt in range(4):
+                  try:
+                      request = urllib.request.Request(url, headers=HEADERS)
+                      with urllib.request.urlopen(request, timeout=25) as r:
+                          return json.load(r)
+                  except Exception as error:
+                      if attempt == 3:
+                          print("REQUEST FAILED:", url, str(error))
+                          return None
+                      time.sleep(2 ** attempt)
+
+          def numeric(value):
+              try:
+                  return float(value)
+              except (ValueError, TypeError):
+                  return None
+
+          def parse(labels, values):
+              if not values or len(labels) != len(values):
+                  return None
+              raw = dict(zip(labels, values))
+              result = {}
+
+              for key, label in [
+                  ("points", "PTS"), ("rebounds", "REB"),
+                  ("assists", "AST"), ("threes", "3PT"),
+                  ("minutes", "MIN")
+              ]:
+                  value = raw.get(label)
+                  if value is None:
+                      return None
+
+                  if key == "threes":
+                      value = str(value).split("-")[0]
+
+                  if key == "minutes" and ":" in str(value):
+                      pieces = str(value).split(":")
+                      if len(pieces) != 2:
+                          return None
+                      a, b = map(numeric, pieces)
+                      if a is None or b is None:
+                          return None
+                      value = a + b / 60
+                  else:
+                      value = numeric(value)
+
+                  if value is None:
+                      return None
+                  result[key] = value
+
+              return result
+
+          def averages(games):
+              if not games:
+                  return None
+              return {
+                  key: round(
+                      sum(game[key] for game in games) / len(games), 2
+                  )
+                  for key in FIELDS
+              }
+
+          def window(games, size):
+              selected = games[:size]
+              return {
+                  "requested": size,
+                  "available": len(selected),
+                  "complete": len(selected) == size,
+                  "averages": averages(selected)
+              }
+
+          events = {}
+          discovery_errors = []
+
+          print("DISCOVERING 2025-26 REGULAR SEASON")
+
+          for month in MONTHS:
+              url = (
+                  f"{BASE}/scoreboard?dates={month}"
+                  f"&season={SEASON}&seasontype=2&limit=200"
+              )
+              data = fetch(url)
+
+              if data is None:
+                  discovery_errors.append(month)
+                  continue
+
+              count = 0
+              for event in data.get("events", []):
+                  if not event.get("status", {}).get("type", {}).get("completed"):
+                      continue
+
+                  season_type = event.get("season", {}).get("type")
+                  if season_type is not None and int(season_type) != 2:
+                      continue
+
+                  events[str(event["id"])] = event
+                  count += 1
+
+              print(month, "completed games:", count)
+              time.sleep(0.2)
+
+          print("TOTAL DISCOVERED:", len(events))
+
+          if discovery_errors:
+              raise SystemExit(
+                  "Discovery failed for months: " +
+                  ", ".join(discovery_errors)
+              )
+
+          if len(events) < 1000:
+              raise SystemExit(
+                  "Incomplete discovery: fewer than 1000 games"
+              )
+
+          logs = defaultdict(dict)
+          failed_events = []
+          invalid_rows = 0
+          processed = 0
+
+          ordered = sorted(
+              events.values(),
+              key=lambda event: event.get("date", "")
+          )
+
+          print("COLLECTING PLAYER BOX SCORES")
+
+          for index, event in enumerate(ordered, 1):
+              event_id = str(event["id"])
+              data = fetch(f"{BASE}/summary?event={event_id}")
+
+              if data is None:
+                  failed_events.append(event_id)
+                  continue
+
+              rows = 0
+
+              for team in data.get("boxscore", {}).get("players", []):
+                  team_info = team.get("team", {})
+                  team_id = str(team_info.get("id", ""))
+                  team_name = team_info.get("displayName", "")
+
+                  for group in team.get("statistics", []):
+                      labels = group.get("labels", [])
+
+                      for entry in group.get("athletes", []):
+                          if entry.get("didNotPlay"):
+                              continue
+
+                          athlete = entry.get("athlete", {})
+                          player_id = str(athlete.get("id", ""))
+                          stats = parse(labels, entry.get("stats", []))
+
+                          if not player_id or stats is None:
+                              invalid_rows += 1
+                              continue
+
+                          logs[player_id][event_id] = {
+                              "eventId": event_id,
+                              "date": event.get("date"),
+                              "name": athlete.get("displayName", ""),
+                              "teamId": team_id,
+                              "team": team_name,
+                              **stats
+                          }
+                          rows += 1
+
+              if rows:
+                  processed += 1
+              else:
+                  failed_events.append(event_id)
+
+              if index % 50 == 0:
+                  print(
+                      "PROGRESS:",
+                      index, "/", len(ordered),
+                      "| processed:", processed,
+                      "| failures:", len(failed_events),
+                      flush=True
+                  )
+
+              time.sleep(0.1)
+
+          players = []
+
+          for player_id, by_event in logs.items():
+              games = sorted(
+                  by_event.values(),
+                  key=lambda game: (
+                      game.get("date") or "",
+                      game["eventId"]
+                  ),
+                  reverse=True
+              )
+
+              players.append({
+                  "playerId": player_id,
+                  "name": games[0]["name"],
+                  "team": games[0]["team"],
+                  "gamesPlayed": len(games),
+                  "seasonAverages": averages(games),
+                  "last5": window(games, 5),
+                  "last10": window(games, 10),
+                  "gameLogs": games
+              })
+
+          players.sort(key=lambda player: player["name"])
+
+          complete5 = sum(p["last5"]["complete"] for p in players)
+          complete10 = sum(p["last10"]["complete"] for p in players)
+          records = sum(p["gamesPlayed"] for p in players)
+
+          result = {
+              "generatedAt": datetime.now(timezone.utc).isoformat(),
+              "season": "2025-26",
+              "seasonType": "regular",
+              "gamesDiscovered": len(events),
+              "gamesProcessed": processed,
+              "failedEvents": failed_events,
+              "invalidRows": invalid_rows,
+              "uniquePlayers": len(players),
+              "playerGameRecords": records,
+              "completeLast5": complete5,
+              "completeLast10": complete10,
+              "players": players
+          }
+
+          with open("nba-regular-season-full-test.json", "w") as f:
+              json.dump(result, f, indent=2)
+
+          print("\n===== NBA FULL REGULAR SEASON =====")
+          print("Games discovered:", len(events))
+          print("Games processed:", processed)
+          print("Failed events:", len(failed_events))
+          print("Invalid rows:", invalid_rows)
+          print("Unique players:", len(players))
+          print("Player-game records:", records)
+          print("Complete last 5:", complete5)
+          print("Complete last 10:", complete10)
+
+          if failed_events:
+              raise SystemExit(
+                  "INCOMPLETE DATA: Failed events must be resolved"
+              )
+
+          if processed != len(events):
+              raise SystemExit(
+                  "INCOMPLETE DATA: Not all games processed"
+              )
+
+          print("FULL REGULAR SEASON TEST COMPLETE")
+          PY
+
+          python /tmp/nba_full_season.py
+
+      - name: Upload regular season report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-regular-season-full-test
+          path: nba-regular-season-full-test.json
+          if-no-files-found: warn
