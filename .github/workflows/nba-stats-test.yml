@@ -1,0 +1,75 @@
+
+name: NBA Stats Connection Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-nba-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install NBA API
+        run: python -m pip install nba_api
+
+      - name: Test NBA Player Game Logs
+        shell: python
+        run: |
+          from nba_api.stats.endpoints import playergamelog
+
+          print("===== NBA STATS CONNECTION TEST =====")
+          print("Testing 2025-26 regular season")
+          print("Player: LeBron James")
+          print("NBA Player ID: 2544")
+
+          try:
+              response = playergamelog.PlayerGameLog(
+                  player_id=2544,
+                  season="2025-26",
+                  season_type_all_star="Regular Season",
+                  timeout=20
+              )
+
+              df = response.get_data_frames()[0]
+
+              required = [
+                  "GAME_DATE", "MATCHUP", "MIN",
+                  "PTS", "REB", "AST", "FG3M"
+              ]
+
+              missing = [
+                  col for col in required
+                  if col not in df.columns
+              ]
+
+              if missing:
+                  print("CHECK: Missing columns:", missing)
+              elif df.empty:
+                  print("CHECK: No game records returned")
+              else:
+                  print("GREEN: NBA PLAYER STATS CONNECTED")
+                  print("TOTAL GAME LOGS:", len(df))
+                  print("AVAILABLE FIELDS:", required)
+
+                  print("\n===== SAMPLE GAME LOGS =====")
+                  print(
+                      df[required].head(5).to_string(
+                          index=False
+                      )
+                  )
+
+          except Exception as error:
+              print("CHECK: NBA STATS CONNECTION FAILED")
+              print("ERROR TYPE:", type(error).__name__)
+              print("ERROR:", str(error)[:300])
+
+          print("\n===== TEST COMPLETE =====")
