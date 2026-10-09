@@ -1,0 +1,855 @@
+
+name: NBA War Room Data Engine
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nba-data-engine
+  cancel-in-progress: false
+
+jobs:
+  build-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build NBA intelligence data
+        shell: bash
+        run: |
+          mkdir -p data
+
+          cat > /tmp/build_nba_engine.py <<'PY'
+          import json
+          import time
+          import urllib.request
+          from collections import defaultdict, Counter
+          from datetime import date, datetime, timedelta, timezone
+          from pathlib import Path
+
+          BASE = (
+              "https://site.api.espn.com/apis/site/v2/"
+              "sports/basketball/nba"
+          )
+
+          SEASON = 2026
+          SEASON_LABEL = "2025-26"
+          SEASON_TYPE = 2
+
+          START = date(2025, 10, 1)
+          END = date(2026, 4, 30)
+
+          FIELDS = [
+              "points",
+              "rebounds",
+              "assists",
+              "threes",
+              "minutes"
+          ]
+
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0",
+              "Accept": "application/json"
+          }
+
+          OUTPUT = Path("data")
+          OUTPUT.mkdir(exist_ok=True)
+
+          def fetch(url):
+              for attempt in range(4):
+                  try:
+                      request = urllib.request.Request(
+                          url,
+                          headers=HEADERS
+                      )
+
+                      with urllib.request.urlopen(
+                          request,
+                          timeout=25
+                      ) as response:
+                          return json.load(response)
+
+                  except Exception as error:
+                      if attempt == 3:
+                          print(
+                              "FETCH FAILED:",
+                              url,
+                              str(error),
+                              flush=True
+                          )
+                          return None
+
+                      time.sleep(2 ** attempt)
+
+          def number(value):
+              try:
+                  result = float(value)
+                  if result != result:
+                      return None
+                  if result in (
+                      float("inf"),
+                      float("-inf")
+                  ):
+                      return None
+                  return result
+              except (ValueError, TypeError):
+                  return None
+
+          def parse_minutes(value):
+              value = str(value)
+
+              if ":" not in value:
+                  return number(value)
+
+              pieces = value.split(":")
+
+              if len(pieces) != 2:
+                  return None
+
+              minutes = number(pieces[0])
+              seconds = number(pieces[1])
+
+              if minutes is None or seconds is None:
+                  return None
+
+              if seconds < 0 or seconds >= 60:
+                  return None
+
+              return minutes + seconds / 60
+
+          def parse_player(labels, values):
+              if not values:
+                  return None, "empty_stats"
+
+              if len(labels) != len(values):
+                  return None, "label_mismatch"
+
+              raw = dict(zip(labels, values))
+
+              required = [
+                  "PTS", "REB", "AST", "3PT", "MIN"
+              ]
+
+              if any(key not in raw for key in required):
+                  return None, "missing_stat_field"
+
+              result = {
+                  "points": number(raw["PTS"]),
+                  "rebounds": number(raw["REB"]),
+                  "assists": number(raw["AST"]),
+                  "threes": number(
+                      str(raw["3PT"]).split("-")[0]
+                  ),
+                  "minutes": parse_minutes(raw["MIN"])
+              }
+
+              if any(v is None for v in result.values()):
+                  return None, "invalid_numeric_value"
+
+              if any(v < 0 for v in result.values()):
+                  return None, "negative_stat_value"
+
+              return result, None
+
+          def average(games, fields):
+              if not games:
+                  return None
+
+              return {
+                  field: round(
+                      sum(g[field] for g in games)
+                      / len(games),
+                      2
+                  )
+                  for field in fields
+              }
+
+          def window(games, count, fields):
+              selected = games[:count]
+
+              return {
+                  "requested": count,
+                  "available": len(selected),
+                  "complete": len(selected) == count,
+                  "averages": average(
+                      selected,
+                      fields
+                  )
+              }
+
+          def write_json(filename, payload):
+              path = OUTPUT / filename
+
+              with path.open(
+                  "w",
+                  encoding="utf-8"
+              ) as file:
+                  json.dump(
+                      payload,
+                      file,
+                      indent=2,
+                      ensure_ascii=False
+                  )
+
+              print("SAVED:", path, flush=True)
+
+          print(
+              "===== NBA DATA ENGINE START =====",
+              flush=True
+          )
+
+          # --------------------------------
+          # PHASE 1: DAILY GAME DISCOVERY
+          # --------------------------------
+
+          events = {}
+          failed_dates = []
+
+          current = START
+
+          while current <= END:
+              day = current.strftime("%Y%m%d")
+
+              url = (
+                  f"{BASE}/scoreboard"
+                  f"?dates={day}"
+                  f"&season={SEASON}"
+                  f"&seasontype={SEASON_TYPE}"
+                  "&limit=100"
+              )
+
+              data = fetch(url)
+
+              if data is None:
+                  failed_dates.append(day)
+
+              else:
+                  for event in data.get("events", []):
+                      status = (
+                          event.get("status", {})
+                          .get("type", {})
+                      )
+
+                      season_type = (
+                          event.get("season", {})
+                          .get("type")
+                      )
+
+                      if not status.get("completed"):
+                          continue
+
+                      if season_type != SEASON_TYPE:
+                          continue
+
+                      event_id = str(
+                          event.get("id", "")
+                      )
+
+                      if event_id:
+                          events[event_id] = event
+
+              current += timedelta(days=1)
+              time.sleep(0.05)
+
+          print(
+              "Discovered games:",
+              len(events),
+              flush=True
+          )
+
+          if failed_dates:
+              raise SystemExit(
+                  "STOP: Daily discovery failed "
+                  "for " + str(len(failed_dates)) +
+                  " dates."
+              )
+
+          if len(events) < 1200:
+              raise SystemExit(
+                  "STOP: Game discovery coverage "
+                  "is unexpectedly low."
+              )
+
+          # Do not silently discard the
+          # five additional discovered events.
+          # They remain explicitly provisional.
+
+          # --------------------------------
+          # PHASE 2: GAME BOX SCORES
+          # --------------------------------
+
+          player_logs = defaultdict(dict)
+          team_logs = defaultdict(dict)
+
+          rejected = []
+          rejected_reasons = Counter()
+
+          failed_summaries = []
+          incomplete_team_games = []
+          duplicate_player_rows = []
+
+          seen_player_rows = set()
+
+          ordered_events = sorted(
+              events.values(),
+              key=lambda e: (
+                  e.get("date", ""),
+                  str(e.get("id", ""))
+              )
+          )
+
+          processed = 0
+
+          for index, event in enumerate(
+              ordered_events,
+              1
+          ):
+              event_id = str(event["id"])
+
+              summary = fetch(
+                  f"{BASE}/summary?event={event_id}"
+              )
+
+              if summary is None:
+                  failed_summaries.append(event_id)
+                  continue
+
+              processed += 1
+
+              event_date = event.get("date")
+
+              # PLAYER STATISTICS
+
+              for team in (
+                  summary.get("boxscore", {})
+                  .get("players", [])
+              ):
+                  team_info = team.get("team", {})
+
+                  team_id = str(
+                      team_info.get("id", "")
+                  )
+
+                  team_name = (
+                      team_info.get("displayName", "")
+                  )
+
+                  for group in team.get(
+                      "statistics", []
+                  ):
+                      labels = group.get(
+                          "labels", []
+                      )
+
+                      for entry in group.get(
+                          "athletes", []
+                      ):
+                          if entry.get("didNotPlay"):
+                              continue
+
+                          athlete = entry.get(
+                              "athlete", {}
+                          )
+
+                          player_id = str(
+                              athlete.get("id", "")
+                          )
+
+                          player_name = (
+                              athlete.get(
+                                  "displayName", ""
+                              )
+                          )
+
+                          if not player_id:
+                              reason = "missing_player_id"
+                              stats = None
+                          else:
+                              stats, reason = parse_player(
+                                  labels,
+                                  entry.get("stats", [])
+                              )
+
+                          if reason:
+                              rejected_reasons[reason] += 1
+
+                              rejected.append({
+                                  "eventId": event_id,
+                                  "date": event_date,
+                                  "player": player_name,
+                                  "team": team_name,
+                                  "reason": reason
+                              })
+                              continue
+
+                          row_key = (
+                              event_id,
+                              player_id
+                          )
+
+                          if row_key in seen_player_rows:
+                              duplicate_player_rows.append({
+                                  "eventId": event_id,
+                                  "playerId": player_id
+                              })
+                              continue
+
+                          seen_player_rows.add(row_key)
+
+                          player_logs[player_id][event_id] = {
+                              "eventId": event_id,
+                              "date": event_date,
+                              "playerId": player_id,
+                              "name": player_name,
+                              "teamId": team_id,
+                              "team": team_name,
+                              **stats
+                          }
+
+              # TEAM QUARTER SCORING
+              # Use the scoreboard competition
+              # associated with this event.
+
+              competitions = event.get(
+                  "competitions", []
+              )
+
+              competition = (
+                  competitions[0]
+                  if competitions else {}
+              )
+
+              valid_team_count = 0
+
+              for competitor in competition.get(
+                  "competitors", []
+              ):
+                  team = competitor.get(
+                      "team", {}
+                  )
+
+                  team_id = str(
+                      team.get("id", "")
+                  )
+
+                  linescores = competitor.get(
+                      "linescores", []
+                  )
+
+                  # Require at least four quarters.
+                  if not team_id or len(linescores) < 4:
+                      continue
+
+                  quarter_scores = []
+
+                  for quarter in linescores[:4]:
+                      score = number(
+                          quarter.get("value")
+                      )
+
+                      if score is None:
+                          quarter_scores = []
+                          break
+
+                      quarter_scores.append(score)
+
+                  if len(quarter_scores) != 4:
+                      continue
+
+                  final_score = number(
+                      competitor.get("score")
+                  )
+
+                  if final_score is None:
+                      continue
+
+                  q1, q2, q3, q4 = quarter_scores
+
+                  # Check scoring arithmetic.
+                  # Overtime is allowed.
+                  regulation = sum(quarter_scores)
+
+                  if final_score < regulation:
+                      continue
+
+                  opponent = next(
+                      (
+                          other
+                          for other in competition.get(
+                              "competitors", []
+                          )
+                          if str(
+                              other.get(
+                                  "team", {}
+                              ).get("id", "")
+                          ) != team_id
+                      ),
+                      None
+                  )
+
+                  opponent_id = (
+                      str(
+                          opponent.get(
+                              "team", {}
+                          ).get("id", "")
+                      )
+                      if opponent else ""
+                  )
+
+                  team_logs[team_id][event_id] = {
+                      "eventId": event_id,
+                      "date": event_date,
+                      "teamId": team_id,
+                      "team": team.get(
+                          "displayName", ""
+                      ),
+                      "opponentId": opponent_id,
+                      "homeAway": competitor.get(
+                          "homeAway", ""
+                      ),
+                      "q1": q1,
+                      "q2": q2,
+                      "q3": q3,
+                      "q4": q4,
+                      "firstHalf": q1 + q2,
+                      "regulation": regulation,
+                      "fullGame": final_score,
+                      "overtimePoints": (
+                          final_score - regulation
+                      )
+                  }
+
+                  valid_team_count += 1
+
+              if valid_team_count != 2:
+                  incomplete_team_games.append(
+                      event_id
+                  )
+
+              if index % 100 == 0:
+                  print(
+                      "PROGRESS:",
+                      index,
+                      "/",
+                      len(ordered_events),
+                      "| Player rows:",
+                      len(seen_player_rows),
+                      "| Rejected:",
+                      len(rejected),
+                      flush=True
+                  )
+
+              time.sleep(0.08)
+
+          # --------------------------------
+          # PHASE 3: PLAYER INTELLIGENCE
+          # --------------------------------
+
+          players = []
+
+          for player_id, event_rows in (
+              player_logs.items()
+          ):
+              games = sorted(
+                  event_rows.values(),
+                  key=lambda g: (
+                      g["date"] or "",
+                      g["eventId"]
+                  ),
+                  reverse=True
+              )
+
+              players.append({
+                  "playerId": player_id,
+                  "name": games[0]["name"],
+                  "lastRecordedTeam": games[0]["team"],
+                  "gamesPlayed": len(games),
+                  "seasonAverages": average(
+                      games,
+                      FIELDS
+                  ),
+                  "last5": window(
+                      games,
+                      5,
+                      FIELDS
+                  ),
+                  "last10": window(
+                      games,
+                      10,
+                      FIELDS
+                  ),
+                  "gameLogs": games
+              })
+
+          players.sort(
+              key=lambda p: p["name"]
+          )
+
+          # --------------------------------
+          # PHASE 4: TEAM SCORING HISTORY
+          # --------------------------------
+
+          teams = []
+
+          TEAM_FIELDS = [
+              "q1",
+              "firstHalf",
+              "fullGame"
+          ]
+
+          for team_id, event_rows in (
+              team_logs.items()
+          ):
+              games = sorted(
+                  event_rows.values(),
+                  key=lambda g: (
+                      g["date"] or "",
+                      g["eventId"]
+                  ),
+                  reverse=True
+              )
+
+              home = [
+                  g for g in games
+                  if g["homeAway"] == "home"
+              ]
+
+              away = [
+                  g for g in games
+                  if g["homeAway"] == "away"
+              ]
+
+              teams.append({
+                  "teamId": team_id,
+                  "team": games[0]["team"],
+                  "gamesPlayed": len(games),
+                  "seasonScoring": average(
+                      games,
+                      TEAM_FIELDS
+                  ),
+                  "last5": window(
+                      games,
+                      5,
+                      TEAM_FIELDS
+                  ),
+                  "last10": window(
+                      games,
+                      10,
+                      TEAM_FIELDS
+                  ),
+                  "homeScoring": average(
+                      home,
+                      TEAM_FIELDS
+                  ),
+                  "awayScoring": average(
+                      away,
+                      TEAM_FIELDS
+                  ),
+                  "homeGames": len(home),
+                  "awayGames": len(away),
+                  "gameLogs": games
+              })
+
+          teams.sort(
+              key=lambda t: t["team"]
+          )
+
+          # --------------------------------
+          # PHASE 5: DATA QUALITY STATUS
+          # --------------------------------
+
+          now = datetime.now(
+              timezone.utc
+          ).isoformat()
+
+          player_records = sum(
+              p["gamesPlayed"]
+              for p in players
+          )
+
+          complete5 = sum(
+              p["last5"]["complete"]
+              for p in players
+          )
+
+          complete10 = sum(
+              p["last10"]["complete"]
+              for p in players
+          )
+
+          # This dataset is historical.
+          # Do not certify it for betting yet.
+
+          quality = {
+              "generatedAt": now,
+              "season": SEASON_LABEL,
+              "espnSeason": SEASON,
+              "seasonType": "regular",
+              "source": "ESPN",
+              "dataStatus": "PROVISIONAL",
+              "bettingQualificationEnabled": False,
+              "gamesDiscovered": len(events),
+              "gamesProcessed": processed,
+              "failedSummaries": failed_summaries,
+              "playerRecords": player_records,
+              "uniquePlayers": len(players),
+              "playersWithLast5": complete5,
+              "playersWithLast10": complete10,
+              "rejectedRows": len(rejected),
+              "rejectionReasons": dict(
+                  rejected_reasons
+              ),
+              "rejectedRowDetails": rejected,
+              "duplicatePlayerRows": (
+                  duplicate_player_rows
+              ),
+              "incompleteTeamGames": (
+                  incomplete_team_games
+              ),
+              "unresolvedChecks": [
+                  "Reconcile discovered event count",
+                  "Review rejected player rows",
+                  "Validate player averages",
+                  "Validate team scoring against box scores",
+                  "Backtest projections before qualification"
+              ]
+          }
+
+          # --------------------------------
+          # PHASE 6: SAVE ENGINE FILES
+          # --------------------------------
+
+          # Only publish a new dataset when
+          # every discovered game was processed.
+
+          if failed_summaries:
+              raise SystemExit(
+                  "STOP: Some game summaries failed."
+              )
+
+          if processed != len(events):
+              raise SystemExit(
+                  "STOP: Game count mismatch."
+              )
+
+          if duplicate_player_rows:
+              raise SystemExit(
+                  "STOP: Duplicate player rows."
+              )
+
+          if not players or not teams:
+              raise SystemExit(
+                  "STOP: Missing player or team data."
+              )
+
+          write_json(
+              "nba-players-2026.json",
+              {
+                  "generatedAt": now,
+                  "season": SEASON_LABEL,
+                  "status": "PROVISIONAL",
+                  "players": players
+              }
+          )
+
+          write_json(
+              "nba-teams-2026.json",
+              {
+                  "generatedAt": now,
+                  "season": SEASON_LABEL,
+                  "status": "PROVISIONAL",
+                  "teams": teams
+              }
+          )
+
+          write_json(
+              "nba-engine-status.json",
+              quality
+          )
+
+          print(
+              "\n===== NBA ENGINE SUMMARY ====="
+          )
+          print(
+              "Games processed:",
+              processed
+          )
+          print(
+              "Players:",
+              len(players)
+          )
+          print(
+              "Player records:",
+              player_records
+          )
+          print(
+              "Teams:",
+              len(teams)
+          )
+          print(
+              "Complete last 5:",
+              complete5
+          )
+          print(
+              "Complete last 10:",
+              complete10
+          )
+          print(
+              "Rejected rows:",
+              len(rejected)
+          )
+          print(
+              "Incomplete team games:",
+              len(incomplete_team_games)
+          )
+          print(
+              "Data status: PROVISIONAL"
+          )
+          print(
+              "Betting qualification: DISABLED"
+          )
+          print(
+              "NBA DATA ENGINE BUILD COMPLETE"
+          )
+          PY
+
+          python /tmp/build_nba_engine.py
+
+      - name: Upload engine data for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-war-room-engine-data
+          path: |
+            data/nba-players-2026.json
+            data/nba-teams-2026.json
+            data/nba-engine-status.json
+          if-no-files-found: error
+
+      - name: Commit engine data to repository
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            data/nba-players-2026.json \
+            data/nba-teams-2026.json \
+            data/nba-engine-status.json
+
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "Build NBA War Room intelligence data"
+            git push
+          fi
