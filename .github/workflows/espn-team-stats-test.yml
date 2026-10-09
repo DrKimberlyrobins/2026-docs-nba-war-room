@@ -17,20 +17,27 @@ jobs:
         shell: python
         run: |
           import json
-          import urllib.request
           import time
+          import urllib.request
 
           BASE = (
               "https://site.api.espn.com/apis/site/v2/"
               "sports/basketball/nba"
           )
 
-          DATES = ["20250605", "20250608", "20250611"]
+          DATES = [
+              "20250605",
+              "20250608",
+              "20250611"
+          ]
 
           def fetch(url):
               req = urllib.request.Request(
                   url,
-                  headers={"Accept": "application/json"}
+                  headers={
+                      "Accept": "application/json",
+                      "User-Agent": "Mozilla/5.0"
+                  }
               )
               with urllib.request.urlopen(
                   req, timeout=20
@@ -39,44 +46,86 @@ jobs:
 
           def number(value):
               try:
-                  return float(str(value).replace(",", ""))
+                  return float(
+                      str(value).replace(",", "")
+                  )
               except (ValueError, TypeError):
                   return None
 
+          def attempts(value):
+              if value is None:
+                  return None
+
+              parts = str(value).split("-")
+
+              if len(parts) != 2:
+                  return None
+
+              return number(parts[1])
+
           def get_stats(team):
               result = {}
-              for item in team.get("statistics", []):
+
+              for item in team.get(
+                  "statistics", []
+              ):
                   key = item.get("name", "")
-                  result[key] = item.get("displayValue")
+                  result[key] = item.get(
+                      "displayValue"
+                  )
+
               return result
 
           def metric(stats, *names):
               for name in names:
-                  value = number(stats.get(name))
+                  value = number(
+                      stats.get(name)
+                  )
+
                   if value is not None:
                       return value
+
               return None
 
           def possessions(stats):
-              fga = metric(
-                  stats, "fieldGoalsAttempted"
-              )
-              fta = metric(
-                  stats, "freeThrowsAttempted"
-              )
-              orb = metric(
-                  stats, "offensiveRebounds"
-              )
-              tov = metric(
-                  stats, "turnovers"
+              fga = attempts(
+                  stats.get(
+                      "fieldGoalsMade-fieldGoalsAttempted"
+                  )
               )
 
-              if None in (fga, fta, orb, tov):
+              fta = attempts(
+                  stats.get(
+                      "freeThrowsMade-freeThrowsAttempted"
+                  )
+              )
+
+              orb = metric(
+                  stats,
+                  "offensiveRebounds"
+              )
+
+              tov = metric(
+                  stats,
+                  "totalTurnovers",
+                  "turnovers"
+              )
+
+              if None in (
+                  fga, fta, orb, tov
+              ):
                   return None
 
-              return fga + 0.44 * fta - orb + tov
+              return (
+                  fga
+                  + 0.44 * fta
+                  - orb
+                  + tov
+              )
 
-          print("===== NBA TEAM INTELLIGENCE =====")
+          print(
+              "===== NBA TEAM INTELLIGENCE ====="
+          )
 
           tested = 0
           qualified = 0
@@ -85,25 +134,39 @@ jobs:
           for day in DATES:
               try:
                   board = fetch(
-                      BASE + "/scoreboard?dates=" + day
+                      BASE
+                      + "/scoreboard?dates="
+                      + day
                   )
 
-                  for event in board.get("events", []):
-                      if (
-                          event.get("status", {})
+                  for event in board.get(
+                      "events", []
+                  ):
+                      status = (
+                          event.get(
+                              "status", {}
+                          )
                           .get("type", {})
-                          .get("name") != "STATUS_FINAL"
-                      ):
+                          .get("name")
+                      )
+
+                      if status != "STATUS_FINAL":
                           continue
 
                       game_id = event["id"]
+
                       summary = fetch(
-                          BASE + "/summary?event=" + game_id
+                          BASE
+                          + "/summary?event="
+                          + game_id
                       )
 
-                      teams = summary.get(
-                          "boxscore", {}
-                      ).get("teams", [])
+                      teams = (
+                          summary.get(
+                              "boxscore", {}
+                          )
+                          .get("teams", [])
+                      )
 
                       if len(teams) != 2:
                           failures.append(
@@ -112,49 +175,83 @@ jobs:
                           continue
 
                       tested += 1
+
                       a, b = teams
+
                       sa = get_stats(a)
                       sb = get_stats(b)
 
                       pa = possessions(sa)
                       pb = possessions(sb)
 
-                      print("\nGAME:", event.get("name"))
-                      print("TEAM A FIELDS:", list(sa))
-                      print("TEAM B FIELDS:", list(sb))
+                      print(
+                          "\nGAME:",
+                          event.get("name")
+                      )
 
-                      if pa is None or pb is None:
-                          print("CHECK: Missing possession inputs")
+                      if (
+                          pa is None
+                          or pb is None
+                      ):
+                          print(
+                              "CHECK: Missing possession inputs"
+                          )
+                          print(
+                              "TEAM A STATS:", sa
+                          )
+                          print(
+                              "TEAM B STATS:", sb
+                          )
+
                           failures.append(
                               f"{game_id}: missing stats"
                           )
                           continue
 
-                      avg_poss = (pa + pb) / 2
+                      avg_poss = (
+                          pa + pb
+                      ) / 2
 
                       competitors = (
-                          event.get("competitions", [{}])[0]
+                          event.get(
+                              "competitions", [{}]
+                          )[0]
                           .get("competitors", [])
                       )
 
                       score_by_id = {
-                          str(c.get("team", {}).get("id")):
-                          number(c.get("score"))
+                          str(
+                              c.get(
+                                  "team", {}
+                              ).get("id")
+                          ): number(
+                              c.get("score")
+                          )
                           for c in competitors
                       }
 
                       id_a = str(
-                          a.get("team", {}).get("id")
-                      )
-                      id_b = str(
-                          b.get("team", {}).get("id")
+                          a.get(
+                              "team", {}
+                          ).get("id")
                       )
 
-                      pts_a = score_by_id.get(id_a)
-                      pts_b = score_by_id.get(id_b)
+                      id_b = str(
+                          b.get(
+                              "team", {}
+                          ).get("id")
+                      )
+
+                      pts_a = score_by_id.get(
+                          id_a
+                      )
+
+                      pts_b = score_by_id.get(
+                          id_b
+                      )
 
                       if (
-                          not avg_poss
+                          avg_poss <= 0
                           or pts_a is None
                           or pts_b is None
                       ):
@@ -163,41 +260,120 @@ jobs:
                           )
                           continue
 
-                      ortg_a = 100 * pts_a / avg_poss
-                      ortg_b = 100 * pts_b / avg_poss
+                      ortg_a = (
+                          100 * pts_a / avg_poss
+                      )
 
-                      print("EST. POSSESSIONS:", round(avg_poss, 2))
-                      print("TEAM A OFF RTG:", round(ortg_a, 2))
-                      print("TEAM B OFF RTG:", round(ortg_b, 2))
-                      print("TEAM A DEF RTG:", round(ortg_b, 2))
-                      print("TEAM B DEF RTG:", round(ortg_a, 2))
+                      ortg_b = (
+                          100 * pts_b / avg_poss
+                      )
+
                       print(
-                          "PACE ESTIMATE:",
-                          round(avg_poss, 2),
-                          "(assumes 48 regulation minutes)"
+                          "TEAM A:",
+                          a.get(
+                              "team", {}
+                          ).get("displayName")
+                      )
+
+                      print(
+                          "TEAM B:",
+                          b.get(
+                              "team", {}
+                          ).get("displayName")
+                      )
+
+                      print(
+                          "TEAM A EST POSSESSIONS:",
+                          round(pa, 2)
+                      )
+
+                      print(
+                          "TEAM B EST POSSESSIONS:",
+                          round(pb, 2)
+                      )
+
+                      print(
+                          "AVERAGE POSSESSIONS:",
+                          round(avg_poss, 2)
+                      )
+
+                      print(
+                          "TEAM A OFF RTG:",
+                          round(ortg_a, 2)
+                      )
+
+                      print(
+                          "TEAM B OFF RTG:",
+                          round(ortg_b, 2)
+                      )
+
+                      print(
+                          "TEAM A DEF RTG:",
+                          round(ortg_b, 2)
+                      )
+
+                      print(
+                          "TEAM B DEF RTG:",
+                          round(ortg_a, 2)
+                      )
+
+                      print(
+                          "PACE PROXY:",
+                          round(avg_poss, 2)
+                      )
+
+                      print(
+                          "NOTE: Pace proxy assumes "
+                          "48 regulation minutes."
                       )
 
                       qualified += 1
+
                       time.sleep(1)
 
               except Exception as error:
                   failures.append(
-                      f"{day}: {type(error).__name__}"
+                      f"{day}: "
+                      f"{type(error).__name__}"
                   )
+
                   print(
-                      "CHECK:", day,
+                      "CHECK:",
+                      day,
                       type(error).__name__,
                       str(error)[:150]
                   )
 
-          print("\n===== FINAL TEAM REPORT =====")
-          print("GAMES TESTED:", tested)
-          print("GAMES WITH METRICS:", qualified)
-          print("FAILURES:", failures)
+          print(
+              "\n===== FINAL TEAM REPORT ====="
+          )
 
-          if qualified == 3 and not failures:
-              print("GREEN: TEAM METRICS AVAILABLE")
+          print(
+              "GAMES TESTED:", tested
+          )
+
+          print(
+              "GAMES WITH METRICS:",
+              qualified
+          )
+
+          print(
+              "FAILURES:", failures
+          )
+
+          if (
+              qualified == 3
+              and tested == 3
+              and not failures
+          ):
+              print(
+                  "GREEN: TEAM METRICS AVAILABLE"
+              )
           else:
-              print("CHECK: TEAM DATA INCOMPLETE")
+              print(
+                  "CHECK: TEAM DATA INCOMPLETE"
+              )
 
-          print("===== TEST COMPLETE =====")
+          print(
+              "===== TEST COMPLETE ====="
+          )
