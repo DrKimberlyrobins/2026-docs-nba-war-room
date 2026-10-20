@@ -111,6 +111,9 @@ footer{padding:25px;text-align:center;color:var(--muted)}
   <div class="panel">
     <h2>Matchup Player Intelligence</h2>
     <p id="matchupHeading" class="gold"></p>
+    <label for="matchupPlayerSearch">Find a player by name</label>
+    <input id="matchupPlayerSearch" type="search" placeholder="Start typing a player name..." autocomplete="off" aria-controls="matchupPlayerSuggestions">
+    <div id="matchupPlayerSuggestions" class="panel" style="display:none;margin-top:8px;padding:8px" role="listbox"></div>
     <p class="small">
       Players are grouped by their last recorded 2025–26 team.
       These are historical roster associations, not confirmed
@@ -715,6 +718,33 @@ function renderMatchupPlayers(){
   $("homeRoster").innerHTML=playerTableHTML(homePlayers);
 }
 
+function searchMatchupPlayerNames(){
+  const query=$("matchupPlayerSearch").value.trim().toLowerCase();
+  const box=$("matchupPlayerSuggestions");
+  box.replaceChildren();
+  if(!query){box.style.display="none";return;}
+  const {away,home}=selectedTeams();
+  const relevant=new Set([String(away?.team||"").toLowerCase(),String(home?.team||"").toLowerCase()]);
+  const matches=players.filter(p=>String(p.name||"").toLowerCase().includes(query))
+    .sort((a,b)=>Number(relevant.has(String(b.lastRecordedTeam||"").toLowerCase()))-Number(relevant.has(String(a.lastRecordedTeam||"").toLowerCase())))
+    .slice(0,12);
+  box.style.display="block";
+  if(!matches.length){box.textContent="No matching players found.";return;}
+  matches.forEach(p=>{
+    const btn=document.createElement("button");
+    btn.type="button";btn.style.display="block";btn.style.width="100%";btn.style.textAlign="left";btn.style.marginBottom="4px";
+    btn.textContent=p.name+" — "+(p.lastRecordedTeam||"Team unavailable");
+    btn.addEventListener("click",()=>{openPlayer(p.playerId);box.style.display="none";});
+    box.append(btn);
+  });
+}
+$("matchupPlayerSearch").addEventListener("input",searchMatchupPlayerNames);
+$("matchupPlayerSearch").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){
+    const first=$("matchupPlayerSuggestions").querySelector("button");
+    if(first){e.preventDefault();first.click();}
+  }
+});
 function handlePlayerClick(event){
   const button=event.target.closest("[data-player]");
   if(button)openPlayer(button.dataset.player);
