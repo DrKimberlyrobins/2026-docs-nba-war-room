@@ -17,7 +17,7 @@ function attach(){
  function field(label,tag){const wrap=document.createElement("label");wrap.textContent=label;wrap.style.display="block";const el=document.createElement(tag);el.style.marginTop="6px";wrap.append(el);grid.append(wrap);return el;}
  const market=field("Player prop","select");for(const [label,key] of MARKETS){const o=new Option(label,key);market.add(o);}
  const line=field("Current sportsbook line","input");line.type="number";line.step="0.5";line.placeholder="Verified line";
- const odds=field("Current American odds","input");odds.type="number";odds.placeholder="e.g. -110";
+ const priceType=field("Price format","select");priceType.add(new Option("American odds","american"));priceType.add(new Option("Kalshi cents","kalshi"));const odds=field("Current price","input");odds.type="number";odds.placeholder="e.g. -110";odds.step="any";const conversion=document.createElement("p");conversion.className="small";grid.append(conversion);function americanFromCents(c){const p=c/100;return p>=.5?-Math.round(100*p/(1-p)):Math.round(100*(1-p)/p);}function priceInfo(){const raw=num(odds.value);if(priceType.value==="kalshi"){odds.placeholder="e.g. 52";odds.min="1";odds.max="99";if(raw===null||raw<=0||raw>=100){conversion.textContent="Enter the price of the contract you are buying, from 1 to 99 cents.";return null;}const american=americanFromCents(raw);conversion.textContent=raw+"¢ = "+raw+"% price-implied probability ≈ "+(american>0?"+":"")+american+" American odds (before Kalshi fees).";return {american,probability:raw/100};}odds.placeholder="e.g. -110";odds.removeAttribute("min");odds.removeAttribute("max");conversion.textContent="American sportsbook odds; enter e.g. -110 or +125.";return raw!==null&&Number.isInteger(raw)&&Math.abs(raw)>=100?{american:raw,probability:be(raw)}:null;}panel.dataset.priceFormat="american";priceType.addEventListener("change",()=>{odds.value="";panel.dataset.priceFormat=priceType.value;calc();});panel.getPriceInfo=priceInfo;panel.getPriceType=()=>priceType.value;
  const side=field("Side","select");side.add(new Option("OVER","OVER"));side.add(new Option("UNDER","UNDER"));
  const source=field("Sportsbook / source","input");source.placeholder="Enter verified sportsbook";
  const result=document.createElement("div");result.className="notice";result.style.whiteSpace="pre-line";result.style.marginTop="15px";panel.append(result);
@@ -26,15 +26,15 @@ function attach(){
  body.append(panel);
  function calc(){
  const games=(Array.isArray(player.gameLogs)?player.gameLogs:[]).slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
- const k=market.value,t=num(line.value),price=num(odds.value);
+ const k=market.value,t=num(line.value),priceData=priceInfo();
  const valid=games.map(g=>({g,v:value(g,k)})).filter(x=>x.v!==null);
  const recent=valid.slice(0,10);
  const hits=xs=>t===null?null:xs.filter(x=>side.value==="OVER"?x.v>t:x.v<t).length;
  const rate=xs=>xs.length&&t!==null?hits(xs)/xs.length:null;
  const r5=rate(valid.slice(0,5)),r10=rate(recent),rAll=rate(valid);
  const historicalQualified=valid.length>=3&&t!==null&&rAll>=.65;
- const oddsValid=price!==null&&Number.isInteger(price)&&Math.abs(price)>=100;
- const lines=["Data: 2025–26 regular season (historical, not current-season)","Recorded games: "+valid.length,"Last 5: "+(r5===null?"enter line":hits(valid.slice(0,5))+"/"+Math.min(5,valid.length)+" ("+percent(r5)+")"),"Last 10: "+(r10===null?"enter line":hits(recent)+"/"+recent.length+" ("+percent(r10)+")"),"Season hit rate: "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),"Sportsbook break-even: "+(oddsValid?percent(be(price)):"enter verified odds"),"Trend screen (65% minimum): "+(t===null?"AWAITING LINE":historicalQualified?"MEETS HISTORICAL TREND":"BELOW THRESHOLD"),"Bet qualification: REVIEW — 2026–27 form, opponent matchup and calibrated pricing model not verified."];
+ const oddsValid=!!priceData;
+ const lines=["Data: 2025–26 regular season (historical, not current-season)","Recorded games: "+valid.length,"Last 5: "+(r5===null?"enter line":hits(valid.slice(0,5))+"/"+Math.min(5,valid.length)+" ("+percent(r5)+")"),"Last 10: "+(r10===null?"enter line":hits(recent)+"/"+recent.length+" ("+percent(r10)+")"),"Season hit rate: "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),"Sportsbook break-even: "+(oddsValid?percent(priceData.probability):"enter verified price"),"Trend screen (65% minimum): "+(t===null?"AWAITING LINE":historicalQualified?"MEETS HISTORICAL TREND":"BELOW THRESHOLD"),"Bet qualification: REVIEW — 2026–27 form, opponent matchup and calibrated pricing model not verified."];
  result.textContent=lines.join("\n");
  table.replaceChildren();
  const head=document.createElement("tr");table.append(head);
