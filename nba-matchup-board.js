@@ -22,23 +22,33 @@
   document.getElementById("matchupPlayers").scrollIntoView({behavior:"smooth",block:"start"});
  }
  async function load(){
-  cards.replaceChildren();status.textContent="Loading upcoming NBA schedule…";
-  const today=new Date(),end=new Date(today);end.setDate(end.getDate()+7);
-  const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="+fmt(today)+"-"+fmt(end)+"&limit=150";
-  try{
+  cards.replaceChildren();status.textContent="Loading NBA schedule for each of the next 7 days…";
+  const today=new Date(),dates=[];
+  for(let i=0;i<7;i++){const d=new Date(today);d.setDate(today.getDate()+i);dates.push(d);}
+  const results=await Promise.allSettled(dates.map(async d=>{
+   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="+fmt(d)+"&limit=100";
    const res=await fetch(url,{cache:"no-store"});if(!res.ok)throw Error("HTTP "+res.status);
-   const data=await res.json();
-   const events=(data.events||[]).filter(e=>{const dt=new Date(e.date);return Number.isFinite(dt.getTime())&&dt>=new Date(today.getTime()-4*3600000)&&e.season?.type===2;}).sort((a,b)=>new Date(a.date)-new Date(b.date));
-   status.textContent=events.length?events.length+" NBA regular-season games listed for the next 7 days. Source: ESPN scoreboard.":"No regular-season games returned for this window.";
+   const data=await res.json();return {date:d,events:data.events||[]};
+  }));
+  let total=0,failed=0;
+  for(let i=0;i<results.length;i++){
+   const item=results[i];if(item.status!=="fulfilled"){failed++;continue;}
+   const events=item.value.events.filter(e=>e.competitions?.[0]?.competitors?.length>=2).sort((a,b)=>new Date(a.date)-new Date(b.date));
+   if(!events.length)continue;
+   const heading=document.createElement("h3");heading.style.cssText="grid-column:1/-1;color:var(--gold);margin:10px 0 0";
+   heading.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"long",month:"long",day:"numeric"}).format(new Date(item.value.date.getFullYear(),item.value.date.getMonth(),item.value.date.getDate(),12))+" — "+events.length+" games";
+   cards.append(heading);
    for(const event of events){
     const comp=event.competitions?.[0],away=comp?.competitors?.find(t=>t.homeAway==="away")?.team,home=comp?.competitors?.find(t=>t.homeAway==="home")?.team;
-    if(!away||!home)continue;
+    if(!away||!home)continue;total++;
     const button=document.createElement("button");button.type="button";button.style.cssText="text-align:left;min-height:90px;display:flex;flex-direction:column;gap:8px";
     const title=document.createElement("strong");title.textContent=(away.displayName||away.name)+" @ "+(home.displayName||home.name);button.append(title);
     const meta=document.createElement("span");meta.className="small";meta.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(event.date))+" • "+(event.status?.type?.shortDetail||"Scheduled");button.append(meta);
     button.addEventListener("click",()=>selectGame(away,home));cards.append(button);
    }
-  }catch(err){status.textContent="Could not retrieve the live NBA schedule ("+err.message+"). Existing manual team selection still works.";}
+  }
+  status.textContent=total+" NBA games loaded across "+(7-failed)+" of 7 days."+(failed?" "+failed+" day(s) failed to load; click Refresh Schedule to retry.":"")+" Source: ESPN daily scoreboard.";
+  if(!total){status.textContent="Schedule could not be loaded. Please retry; manual team selection is still available.";}
  }
  document.getElementById("nbaScheduleRefresh").addEventListener("click",load);
  load();
