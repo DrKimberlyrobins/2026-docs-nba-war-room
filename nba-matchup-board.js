@@ -26,7 +26,7 @@
   const today=new Date(),dates=[];
   for(let i=0;i<7;i++){const d=new Date(today);d.setDate(today.getDate()+i);dates.push(d);}
   const results=await Promise.allSettled(dates.map(async d=>{
-   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="+fmt(d)+"&limit=100";
+   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="+fmt(d);
    const res=await fetch(url,{cache:"no-store"});if(!res.ok)throw Error("HTTP "+res.status);
    const data=await res.json();return {date:d,events:data.events||[]};
   }));
@@ -41,14 +41,14 @@
    for(const event of events){
     const comp=event.competitions?.[0],away=comp?.competitors?.find(t=>t.homeAway==="away")?.team,home=comp?.competitors?.find(t=>t.homeAway==="home")?.team;
     if(!away||!home)continue;total++;
-    const button=document.createElement("button");button.type="button";button.style.cssText="text-align:left;min-height:90px;display:flex;flex-direction:column;gap:8px";
-    const title=document.createElement("strong");title.textContent=(away.displayName||away.name)+" @ "+(home.displayName||home.name);button.append(title);
-    const meta=document.createElement("span");meta.className="small";meta.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(event.date))+" • "+(event.status?.type?.shortDetail||"Scheduled");button.append(meta);
+    const button=document.createElement("button");button.type="button";button.style.cssText="text-align:center;min-height:112px;display:flex;flex-direction:column;gap:10px;background:#081525;border:1px solid #36516b;border-radius:10px;padding:14px";
+    const title=document.createElement("div");title.style.cssText="display:grid;grid-template-columns:1fr 24px 1fr;align-items:center;gap:5px;font-weight:bold";const a=document.createElement("span"),at=document.createElement("span"),h=document.createElement("span");a.textContent=away.displayName||away.name;at.textContent="@";at.style.color="#35df93";h.textContent=home.displayName||home.name;title.append(a,at,h);button.append(title);
+    const meta=document.createElement("span");meta.className="small";meta.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(event.date))+" • "+(event.status?.type?.shortDetail||"Scheduled");button.prepend(meta);const action=document.createElement("div");action.textContent="Analyze Matchup";action.style.cssText="background:#28d99a;color:#061521;padding:9px;border-radius:6px;font-weight:bold";button.append(action);
     button.addEventListener("click",()=>selectGame(away,home));cards.append(button);
    }
   }
   status.textContent=total+" NBA games loaded across "+(7-failed)+" of 7 days."+(failed?" "+failed+" day(s) failed to load; click Refresh Schedule to retry.":"")+" Source: ESPN daily scoreboard.";
-  if(!total){status.textContent="Schedule could not be loaded. Please retry; manual team selection is still available.";}
+  if(!total){status.textContent="ESPN schedule unavailable. Manual selection remains available; no games have been invented.";}
  }
  document.getElementById("nbaScheduleRefresh").addEventListener("click",load);
  load();
