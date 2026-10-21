@@ -55,13 +55,13 @@
     const oddsBox=document.createElement("div");oddsBox.style.cssText="border-top:1px solid #36516b;padding-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;text-align:center";
     const spread=document.createElement("div"),totalBox=document.createElement("div");
     const details=typeof odds?.details==="string"?odds.details.trim():"";
-    const total=Number(odds?.overUnder);
+    const gameTotal=Number(odds?.overUnder);
     const validSpread=/^[A-Za-z0-9 .]+\s[-+]\d+(?:\.\d+)?$/.test(details);
     spread.textContent="Spread: "+(validSpread?details:"Unavailable");
-    totalBox.textContent="Total: "+(Number.isFinite(total)&&total>0?total.toFixed(1):"Unavailable");
+    totalBox.textContent="Total: "+(Number.isFinite(gameTotal)&&gameTotal>0?gameTotal.toFixed(1):"Unavailable");
     oddsBox.append(spread,totalBox);button.append(oddsBox);
     const oddsNote=document.createElement("div");oddsNote.style.cssText="font-size:10px;color:#a5b7cd";
-    oddsNote.textContent=validSpread||(Number.isFinite(total)&&total>0)?"ESPN scoreboard odds · check source for current price":"Odds not provided by ESPN scoreboard";
+    oddsNote.textContent=validSpread||(Number.isFinite(gameTotal)&&gameTotal>0)?"ESPN scoreboard odds · check source for current price":"Odds not provided by ESPN scoreboard";
     button.append(oddsNote);
     const meta=document.createElement("span");meta.className="small";meta.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(event.date))+" • "+(event.status?.type?.shortDetail||"Scheduled");button.prepend(meta);const action=document.createElement("div");action.textContent="Analyze Matchup";action.style.cssText="background:#28d99a;color:#061521;padding:9px;border-radius:6px;font-weight:bold";button.append(action);
     button.addEventListener("click",()=>selectGame(away,home));cards.append(button);
