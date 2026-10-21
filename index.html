@@ -106,6 +106,14 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .game-interior-nav .game-nav-links{flex-wrap:nowrap;overflow-x:auto;padding:5px 0 10px;scrollbar-width:thin}
 .game-interior-nav .game-nav-links button{flex:0 0 auto;white-space:nowrap}
 .game-interior-nav .game-nav-links button.active{background:var(--gold);color:#081321;border-color:var(--gold)}
+
+.evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.evidence-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px}
+.evidence-card h3{color:var(--gold);margin:0 0 9px}
+.evidence-card p{line-height:1.6;margin:0}
+.deep-research summary{cursor:pointer;color:var(--gold);font-weight:bold;padding:8px}
+.deep-research[open] summary{margin-bottom:14px}
+@media(max-width:650px){.evidence-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -755,6 +763,34 @@ function setInsideTab(tab){
  root.querySelectorAll(".inside-tab").forEach(btn=>{const selected=btn.dataset.inside===tab;btn.classList.toggle("active",selected);btn.setAttribute("aria-selected",String(selected))});
 }
 
+function matchupEvidence(away,home){
+ const stats=(t,loc)=>{const games=teamLogs(t).filter(g=>!loc||g.homeAway===loc);return {n:games.length,scored:avg(games,"fullGame"),allowed:opponentAllowed(t,"fullGame",loc).value};};
+ const a=stats(away,"away"),h=stats(home,"home"),as=stats(away,null),hs=stats(home,null);
+ const f=x=>x===null||!Number.isFinite(x)?"unavailable":x.toFixed(1);
+ const edge=(x,y,low=false)=>x===null||y===null?"Insufficient data":Math.abs(x-y)<0.05?"Essentially even":safe((low?x<y:x>y)?away.team:home.team);
+ const narrative=(title,body)=>'<article class="evidence-card"><h3>'+title+'</h3><p>'+body+'</p></article>';
+ return '<section class="panel evidence-analysis"><h2>Game Analysis · What the Numbers Say</h2><p class="small">Based only on 2025–26 historical records. This is not a live injury report or win prediction.</p>'+
+ '<div class="evidence-grid">'+
+ narrative('Offensive comparison',safe(away.team)+' averaged '+f(as.scored)+' points per game; '+safe(home.team)+' averaged '+f(hs.scored)+'. Historical season scoring advantage: <strong>'+edge(as.scored,hs.scored)+'</strong>.')+
+ narrative('Defensive comparison',safe(away.team)+' allowed '+f(as.allowed)+' points per game; '+safe(home.team)+' allowed '+f(hs.allowed)+'. Lower is better. Historical defense advantage: <strong>'+edge(as.allowed,hs.allowed,true)+'</strong>.')+
+ narrative('Location matters',safe(away.team)+' averaged '+f(a.scored)+' points in '+a.n+' road games, while '+safe(home.team)+' averaged '+f(h.scored)+' in '+h.n+' home games. These are different opponent samples, not head-to-head results.')+
+ narrative('What could change the matchup','Current injuries, confirmed starters, pace, rest, and opposing personnel have not been verified by this historical dataset. We should not manufacture player-specific tactical claims.')+
+ '</div><h3>Research status</h3><div class="notice">Historical comparisons available. Current injury verification, pace/possession statistics, advanced efficiency, and validated win probability are not connected. No betting qualification.</div></section>';
+}
+function matchupMarkets(away,home){
+ const f=(v)=>v===null||!Number.isFinite(v)?"—":v.toFixed(1);
+ const periods=[["First quarter","q1"],["First half","firstHalf"],["Full game","fullGame"]];
+ const rows=periods.map(([name,key])=>{
+   const aa=avg(teamLogs(away).filter(g=>g.homeAway==="away"),key),hh=avg(teamLogs(home).filter(g=>g.homeAway==="home"),key);
+   const ad=opponentAllowed(away,key,"away").value,hd=opponentAllowed(home,key,"home").value;
+   const ae=experimentalEstimate(aa,hd),he=experimentalEstimate(hh,ad);
+   return '<tr><td>'+name+'</td><td>'+f(ae)+'</td><td>'+f(he)+'</td><td>'+f(ae===null||he===null?null:ae+he)+'</td><td>Unverified</td></tr>';
+ }).join("");
+ return '<section class="panel"><h2>Market Intelligence</h2><p class="small">Independent historical reference estimates, not sportsbook prices or validated betting projections.</p>'+
+ '<div class="scroll"><table><thead><tr><th>Market</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th><th>Combined estimate</th><th>Verified market</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+ '<div class="notice">PASS — A current, source-verified opening/current line and validated projection are not connected to this research view. No fabricated odds, public-bet percentages, or betting edge.</div></section>';
+}
+
 function analyzeTeams(){
   const {away,home}=selectedTeams();
   if(!away||!home)return;
@@ -795,10 +831,11 @@ function analyzeTeams(){
     ${gameInteriorNavigation(away,home)}
     <div data-inside-panel="matchup">${visualTeamSummary(away,home)}</div>
     <div data-inside-panel="scoring" hidden>
-    ${matchupScoringLab(away,home,awayProfile,homeProfile)}</div>
-    <div data-inside-panel="analysis" hidden>${expandedTeamIntelligence(away,home)}</div>
+    ${matchupScoringLab(away,home,awayProfile,homeProfile)}
+    <div class="panel"><h3>Detailed 1Q / 1H / Full-Game Inputs</h3><div class="scroll"><table><thead><tr><th>Period</th><th>Away scored</th><th>Home scored</th><th>Away allowed</th><th>Home allowed</th><th>Away estimate</th><th>Home estimate</th><th>Combined</th></tr></thead><tbody>${comparisonRows}</tbody></table></div></div></div>
+    <div data-inside-panel="analysis" hidden>${matchupEvidence(away,home)}${expandedTeamIntelligence(away,home)}</div>
     <div data-inside-panel="matchup">
-    <div class="panel">
+    <details class="panel deep-research"><summary>Detailed historical research tables</summary><div class="panel">
       <h2>${safe(away.team)} @ ${safe(home.team)}</h2>
       <p class="small">
         Away-team road history compared with home-team home history.
@@ -863,8 +900,8 @@ function analyzeTeams(){
       </div>
     </div>
 
-    </div>
-    <div data-inside-panel="markets" hidden><div class="panel">
+    </details></div>
+    <div data-inside-panel="markets" hidden>${matchupMarkets(away,home)}<div class="panel">
       <h3 id="gameMarketStatus">Market Qualification</h3>
       <div class="notice">
         PASS — No validated projection and verified
