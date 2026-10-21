@@ -1,7 +1,7 @@
 "use strict";
 (function(){
  const wrap=document.createElement("section");wrap.className="panel";wrap.id="nbaScheduleBoard";
- wrap.innerHTML='<h2>NBA One-Click Matchup Board</h2><p class="small">Scheduled NBA games from ESPN scoreboard. Times shown in Central Time. Select a matchup to load both teams and player intelligence automatically.</p><div id="nbaScheduleStatus" class="small">Loading upcoming games…</div><div id="nbaScheduleCards" class="grid" style="margin-top:12px"></div><button id="nbaScheduleRefresh" type="button" style="margin-top:12px">Refresh Schedule</button>';
+ wrap.innerHTML='<h2>NBA One-Click Matchup Board</h2><p class="small">Scheduled NBA games from ESPN scoreboard. Times shown in Central Time. Select a matchup to load both teams and player intelligence automatically.</p><div id="nbaScheduleHistory" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0"><button type="button" id="nbaPreviousWeek">← Previous 7 days</button><button type="button" id="nbaTodayWeek">Today</button><button type="button" id="nbaNextWeek">Next 7 days →</button><label style="font-size:12px">Jump to date <input id="nbaJumpDate" type="date" style="max-width:165px"></label></div><div id="nbaScheduleStatus" class="small">Loading schedule…</div><div id="nbaScheduleCards" class="grid" style="margin-top:12px"></div><button id="nbaScheduleRefresh" type="button" style="margin-top:12px">Refresh Schedule</button>';
  const teamsSection=document.getElementById("teams");if(!teamsSection)return;teamsSection.insertAdjacentElement("afterbegin",wrap);
  const status=document.getElementById("nbaScheduleStatus"),cards=document.getElementById("nbaScheduleCards");
  const fmt=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
@@ -21,15 +21,21 @@
   showTab("teams");analyzeTeams();
   document.getElementById("teamResults").scrollIntoView({behavior:"smooth",block:"start"});
  }
+ let anchor=new Date();anchor.setHours(12,0,0,0);
+ let requestId=0;
  async function load(){
-  cards.replaceChildren();status.textContent="Loading NBA schedule for each of the next 7 days…";
-  const today=new Date(),dates=[];
-  for(let i=0;i<7;i++){const d=new Date(today);d.setDate(today.getDate()+i);dates.push(d);}
+  const myRequest=++requestId;
+  cards.replaceChildren();
+  const dates=[];
+  for(let i=0;i<7;i++){const d=new Date(anchor);d.setDate(anchor.getDate()+i);dates.push(d);}
+  status.textContent="Loading NBA games for "+fmt(dates[0])+" through "+fmt(dates[6])+"…";
+  document.getElementById("nbaJumpDate").value=anchor.getFullYear()+"-"+String(anchor.getMonth()+1).padStart(2,"0")+"-"+String(anchor.getDate()).padStart(2,"0");
   const results=await Promise.allSettled(dates.map(async d=>{
    const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="+fmt(d);
    const res=await fetch(url,{cache:"no-store"});if(!res.ok)throw Error("HTTP "+res.status);
    const data=await res.json();return {date:d,events:data.events||[]};
   }));
+  if(myRequest!==requestId)return;
   let total=0,failed=0;
   for(let i=0;i<results.length;i++){
    const item=results[i];if(item.status!=="fulfilled"){failed++;continue;}
@@ -76,9 +82,20 @@
     button.addEventListener("click",()=>selectGame(away,home));cards.append(button);
    }
   }
-  status.textContent=total+" NBA games loaded across "+(7-failed)+" of 7 days."+(failed?" "+failed+" day(s) failed to load; click Refresh Schedule to retry.":"")+" Source: ESPN daily scoreboard.";
-  if(!total){status.textContent="ESPN schedule unavailable. Manual selection remains available; no games have been invented.";}
+  status.textContent=total+" NBA games loaded for "+fmt(dates[0])+"–"+fmt(dates[6])+" across "+(7-failed)+" of 7 days."+(failed?" "+failed+" day(s) failed to load; click Refresh Schedule to retry.":"")+" Source: ESPN daily scoreboard.";
+  if(!total){status.textContent="No games returned for this date range. Try another week or Refresh Schedule. Manual team selection remains available.";}
  }
+ const shift=days=>{anchor.setDate(anchor.getDate()+days);load();};
+ document.getElementById("nbaPreviousWeek").addEventListener("click",()=>shift(-7));
+ document.getElementById("nbaNextWeek").addEventListener("click",()=>shift(7));
+ document.getElementById("nbaTodayWeek").addEventListener("click",()=>{anchor=new Date();anchor.setHours(12,0,0,0);load();});
+ document.getElementById("nbaJumpDate").addEventListener("change",e=>{
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(e.target.value);
+  if(!match)return;
+  const d=new Date(Number(match[1]),Number(match[2])-1,Number(match[3]),12);
+  if(d.getFullYear()!==Number(match[1])||d.getMonth()!==Number(match[2])-1||d.getDate()!==Number(match[3]))return;
+  anchor=d;load();
+ });
  document.getElementById("nbaScheduleRefresh").addEventListener("click",load);
  load();
 })();
