@@ -114,6 +114,19 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .deep-research summary{cursor:pointer;color:var(--gold);font-weight:bold;padding:8px}
 .deep-research[open] summary{margin-bottom:14px}
 @media(max-width:650px){.evidence-grid{grid-template-columns:1fr}}
+
+.matchup-compare .compare-head,.matchup-compare .compare-sides{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.matchup-compare .compare-head{font-size:13px;color:var(--gold);margin:14px 0}
+.matchup-compare .compare-head strong:last-child{text-align:right}
+.matchup-compare .compare-metric{padding:14px 0;border-top:1px solid #30435c}
+.matchup-compare .compare-label{font-size:13px;font-weight:700;margin-bottom:8px}
+.matchup-compare .compare-sides>div:last-child{text-align:right}
+.matchup-compare .compare-sides strong{font-size:19px;font-variant-numeric:tabular-nums}
+.matchup-compare .compare-rail{height:11px;border-radius:9px;background:#2b3c51;margin-top:6px;overflow:hidden}
+.matchup-compare .compare-fill{height:100%;border-radius:9px}
+.matchup-compare .compare-fill.away{background:#46aee8}
+.matchup-compare .compare-fill.home{background:#37dba0;margin-left:auto}
+.matchup-compare .compare-explain{font-size:12px;color:#bbcadc;margin:7px 0 0}
 </style>
 </head>
 <body>
@@ -766,6 +779,34 @@ function setInsideTab(tab){
  root.querySelectorAll(".inside-tab").forEach(btn=>{const selected=btn.dataset.inside===tab;btn.classList.toggle("active",selected);btn.setAttribute("aria-selected",String(selected))});
 }
 
+function matchupComparisonBoard(away,home){
+ const read=(team,loc)=>{
+  const logs=teamLogs(team).filter(g=>!loc||g.homeAway===loc);
+  const scored=avg(logs,"fullGame"),allowed=opponentAllowed(team,"fullGame",loc).value;
+  return {n:logs.length,scored,allowed,margin:scored===null||allowed===null?null:scored-allowed};
+ };
+ const awaySeason=read(away,null),homeSeason=read(home,null),awayRoad=read(away,"away"),homeAtHome=read(home,"home");
+ const fmt=x=>x===null||!Number.isFinite(x)?"—":x.toFixed(1);
+ const line=(label,a,h,lower=false)=>{
+  const ok=a!==null&&h!==null&&Number.isFinite(a)&&Number.isFinite(h);
+  const delta=ok?Math.abs(a-h):null;
+  const winner=!ok?"Not available":delta<0.05?"Even":((lower?a<h:a>h)?away.team:home.team);
+  const max=ok?Math.max(a,h,1):1;
+  const bar=(value,cls)=>'<div class="compare-rail"><div class="compare-fill '+cls+'" style="width:'+(ok?Math.max(0,value/max*100).toFixed(2):0)+'%"></div></div>';
+  return '<div class="compare-metric"><div class="compare-label">'+label+'</div><div class="compare-sides"><div><strong>'+fmt(a)+'</strong>'+bar(a,"away")+'</div><div><strong>'+fmt(h)+'</strong>'+bar(h,"home")+'</div></div>'+
+   '<p class="compare-explain">'+(ok?'Difference: '+delta.toFixed(1)+' points · '+safe(winner)+(lower?' (lower is better)':''):'Not enough matched historical records')+'</p></div>';
+ };
+ return '<section class="panel matchup-compare"><h2>Side-by-Side Team Comparison</h2>'+
+ '<p class="small">Same scale for both teams within each metric. A 1-point difference appears small; bar length starts at zero. Historical 2025–26 games only.</p>'+
+ '<div class="compare-head"><strong>'+safe(away.team)+'</strong><strong>'+safe(home.team)+'</strong></div>'+
+ line('Season · Points scored per game',awaySeason.scored,homeSeason.scored)+
+ line('Season · Points allowed per game',awaySeason.allowed,homeSeason.allowed,true)+
+ line('Season · Scoring margin',awaySeason.margin,homeSeason.margin)+
+ line('Road vs home · Points scored',awayRoad.scored,homeAtHome.scored)+
+ line('Road vs home · Points allowed',awayRoad.allowed,homeAtHome.allowed,true)+
+ '<p class="small">Sample: '+awaySeason.n+' away-team season games ('+awayRoad.n+' road) and '+homeSeason.n+' home-team season games ('+homeAtHome.n+' home). These are descriptive comparisons, not projections or matchup win probabilities.</p></section>';
+}
+
 function matchupEvidence(away,home){
  const stats=(t,loc)=>{const games=teamLogs(t).filter(g=>!loc||g.homeAway===loc);return {n:games.length,scored:avg(games,"fullGame"),allowed:opponentAllowed(t,"fullGame",loc).value};};
  const a=stats(away,"away"),h=stats(home,"home"),as=stats(away,null),hs=stats(home,null);
@@ -832,7 +873,7 @@ function analyzeTeams(){
 
   $("teamResults").innerHTML=`
     ${gameInteriorNavigation(away,home)}
-    <div data-inside-panel="matchup">${visualTeamSummary(away,home)}</div>
+    <div data-inside-panel="matchup">${visualTeamSummary(away,home)}${matchupComparisonBoard(away,home)}</div>
     <div data-inside-panel="scoring" hidden>
     ${matchupScoringLab(away,home,awayProfile,homeProfile)}
     <div class="panel"><h3>Detailed 1Q / 1H / Full-Game Inputs</h3><div class="scroll"><table><thead><tr><th>Period</th><th>Away scored</th><th>Home scored</th><th>Away allowed</th><th>Home allowed</th><th>Away estimate</th><th>Home estimate</th><th>Combined</th></tr></thead><tbody>${comparisonRows}</tbody></table></div></div></div>
