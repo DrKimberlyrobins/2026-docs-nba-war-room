@@ -47,6 +47,15 @@
       const cell=document.createElement("div");cell.style.cssText="min-width:0;text-align:center";
       const abbr=document.createElement("div");abbr.style.cssText="font-size:18px;font-weight:800;color:#f5c765";abbr.textContent=team.abbreviation||team.shortDisplayName||"—";
       const full=document.createElement("div");full.style.cssText="font-size:11px;line-height:1.3;color:#d1deee;overflow-wrap:anywhere";full.textContent=team.displayName||team.name||"";
+      const logoUrl=typeof team.logo==="string"?team.logo:(Array.isArray(team.logos)?team.logos[0]?.href:"");
+      if(logoUrl&&/^https:\/\/(?:[a-z0-9-]+\.)*espncdn\.com\//i.test(logoUrl)){
+        const logo=document.createElement("img");
+        logo.src=logoUrl;logo.alt=(team.displayName||team.name||"Team")+" logo";
+        logo.loading="lazy";logo.referrerPolicy="no-referrer";
+        logo.style.cssText="display:block;width:46px;height:46px;object-fit:contain;margin:0 auto 5px";
+        logo.onerror=()=>logo.remove();
+        cell.append(logo);
+      }
       cell.append(abbr,full);return cell;
     };
     const at=document.createElement("span");at.textContent="@";at.style.color="#35df93";
