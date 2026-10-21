@@ -127,6 +127,18 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .matchup-compare .compare-fill.away{background:#46aee8}
 .matchup-compare .compare-fill.home{background:#37dba0;margin-left:auto}
 .matchup-compare .compare-explain{font-size:12px;color:#bbcadc;margin:7px 0 0}
+
+.full-stat-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.full-stat-table th,.full-stat-table td{padding:11px 8px;border-bottom:1px solid #30435c}
+.full-stat-table thead th{position:sticky;top:0;background:#1a2f4b;color:#f3cb75;font-size:12px}
+.full-stat-table th:first-child{text-align:left;width:43%}
+.full-stat-table td{text-align:center;width:28%;font-size:15px}
+.full-stat-table td strong{font-weight:650}
+.full-stat-table td small{display:block;color:#b8c7da;font-size:10px;margin-top:3px}
+.full-stat-table .stat-group th{background:#213b5b;color:#f3cb75;padding:12px;text-align:left}
+.full-stat-table .stat-leader strong{color:#35dda0}
+.full-stat-dashboard .scroll{max-height:680px;overflow:auto}
+@media(max-width:550px){.full-stat-table th,.full-stat-table td{padding:9px 5px;font-size:12px}.full-stat-table td{font-size:14px}}
 </style>
 </head>
 <body>
@@ -779,6 +791,46 @@ function setInsideTab(tab){
  root.querySelectorAll(".inside-tab").forEach(btn=>{const selected=btn.dataset.inside===tab;btn.classList.toggle("active",selected);btn.setAttribute("aria-selected",String(selected))});
 }
 
+
+function fullTeamStatDashboard(away,home){
+ const all=Array.from(teamById.values());
+ const get=(t,k)=>{
+  const logs=teamLogs(t), scored=avg(logs,"fullGame"),allowed=opponentAllowed(t,"fullGame",null).value;
+  if(k==="points")return scored;
+  if(k==="allowed")return allowed;
+  if(k==="margin")return scored===null||allowed===null?null:scored-allowed;
+  return null;
+ };
+ const rank=(team,k,lower)=>{
+  const rows=all.map(t=>({id:String(t.teamId),v:get(t,k)})).filter(r=>r.v!==null&&Number.isFinite(r.v));
+  const val=get(team,k);if(val===null||rows.length<25)return null;
+  const place=1+rows.filter(r=>lower?r.v<val:r.v>val).length;
+  return place+" / "+rows.length;
+ };
+ const groups=[
+  ["Scoring & defense",[
+   ["Points per game","points",false],["Points allowed","allowed",true],["Scoring margin","margin",false],
+   ["Rebounds",null],["Offensive rebounds",null],["Defensive rebounds",null],["Assists",null],["Turnovers",null,true],["Steals",null],["Blocks",null],["Fouls",null,true]]],
+  ["Shooting",[
+   ["Field goals made",null],["Field goal %",null],["3-pointers made",null],["3-point %",null],["Free throws made",null],["Free throw %",null]]],
+  ["Advanced efficiency",[
+   ["Pace",null],["Effective FG %",null],["True shooting %",null],["Offensive rating",null],["Defensive rating",null,true],["Net rating",null]]],
+  ["Scoring sources",[
+   ["Points in paint",null],["Fast-break points",null],["Second-chance points",null],["Points off turnovers",null],["Bench points",null]]]
+ ];
+ const fmt=x=>x===null||!Number.isFinite(x)?"—":x.toFixed(1);
+ const rows=groups.map(([name,metrics])=>'<tr class="stat-group"><th colspan="3">'+name+'</th></tr>'+metrics.map(([label,key,lower])=>{
+  const a=key?get(away,key):null,h=key?get(home,key):null;
+  const winner=a!==null&&h!==null&&Math.abs(a-h)>=0.05?(lower?a<h:a>h?"away":"home"):"";
+  const cell=(team,v,side)=>'<td class="'+(winner===side?"stat-leader":"")+'"><strong>'+fmt(v)+'</strong>'+(key&&v!==null&&rank(team,key,!!lower)?'<small>Rank '+rank(team,key,!!lower)+'</small>':'')+'</td>';
+  return '<tr><th scope="row">'+label+'</th>'+cell(away,a,"away")+cell(home,h,"home")+'</tr>';
+ }).join("")).join("");
+ return '<section class="panel full-stat-dashboard"><h2>Complete Team Statistics</h2>'+
+  '<p class="small">2025–26 historical season · Points, points allowed, and margin are calculated from verified matched game records. Rankings appear only with sufficient team coverage. Unavailable metrics are never estimated.</p>'+
+  '<div class="scroll"><table class="full-stat-table"><thead><tr><th>STAT</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  '<p class="small">— = not connected to a verified team-stat source. A highlighted number indicates a descriptive advantage, not a betting edge.</p></section>';
+}
+
 function matchupComparisonBoard(away,home){
  const read=(team,loc)=>{
   const logs=teamLogs(team).filter(g=>!loc||g.homeAway===loc);
@@ -873,7 +925,7 @@ function analyzeTeams(){
 
   $("teamResults").innerHTML=`
     ${gameInteriorNavigation(away,home)}
-    <div data-inside-panel="matchup">${visualTeamSummary(away,home)}${matchupComparisonBoard(away,home)}</div>
+    <div data-inside-panel="matchup">${visualTeamSummary(away,home)}${fullTeamStatDashboard(away,home)}${matchupComparisonBoard(away,home)}</div>
     <div data-inside-panel="scoring" hidden>
     ${matchupScoringLab(away,home,awayProfile,homeProfile)}
     <div class="panel"><h3>Detailed 1Q / 1H / Full-Game Inputs</h3><div class="scroll"><table><thead><tr><th>Period</th><th>Away scored</th><th>Home scored</th><th>Away allowed</th><th>Home allowed</th><th>Away estimate</th><th>Home estimate</th><th>Combined</th></tr></thead><tbody>${comparisonRows}</tbody></table></div></div></div>
