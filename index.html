@@ -80,6 +80,21 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 @media(max-width:390px){.team-visual .tv-card{padding:10px}.team-visual .tv-name{font-size:13px}}
 .team-visual .tv-zero-track{position:relative;overflow:hidden;background:linear-gradient(to right,#26354b 49.7%,#a4b8cc 49.7%,#a4b8cc 50.3%,#26354b 50.3%)}
 .team-visual .tv-zero-track .tv-fill{top:0;bottom:0;height:100%;min-width:0}
+
+/* Game-interior research navigation and scoring lab */
+.game-interior-nav .game-nav-links{display:flex;flex-wrap:wrap;gap:8px}
+.game-interior-nav .game-nav-links a,.game-interior-nav .game-nav-links button{display:inline-flex;align-items:center;text-decoration:none;color:#edf4ff;background:#203956;border:1px solid #48617d;border-radius:9px;padding:10px 12px;font-size:13px}
+.game-interior-nav .game-nav-links a:focus-visible{outline:2px solid #f5c765}
+.game-scoring-lab .lab-period-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.game-scoring-lab .lab-period{background:#182a43;border:1px solid #3c5370;border-radius:12px;padding:14px;min-width:0}
+.game-scoring-lab .lab-period-title{font-weight:700;color:#f5c765;font-size:14px}
+.game-scoring-lab .lab-total{font-size:clamp(25px,3vw,34px);font-weight:800;margin-top:12px}
+.game-scoring-lab .lab-caption{font-size:12px;color:#b7c8dd;line-height:1.5;margin:7px 0}
+.game-scoring-lab .lab-bar-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(45px,2fr) 40px;align-items:center;gap:6px;margin:12px 0;font-size:12px}
+.game-scoring-lab .lab-bar-row span{overflow-wrap:anywhere}
+.game-scoring-lab .lab-bar-track{height:12px;border-radius:8px;background:#28394e;overflow:hidden}
+.game-scoring-lab .lab-bar-fill{height:100%;border-radius:8px}
+@media(max-width:760px){.game-scoring-lab .lab-period-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -583,7 +598,7 @@ function expandedTeamIntelligence(away,home){
     const cell=v=>v?wl(v)+" · "+v.n+"/"+v.total+" verified":"—";
     return "<tr><td>"+safe(label)+"</td><td>"+cell(x)+"</td><td>"+cell(y)+"</td></tr>";
   }
-  return '<div class="panel" id="expandedTeamIntelligence">'+
+  return '<div class="panel" id="gameFormIntelligence">'+
     '<h3>Team Form & Defensive Intelligence</h3>'+
     '<p class="small">2025–26 historical records only. Scored / Allowed / Margin; sample counts show matched opponent records. Road and home samples are separate from season samples. No current-season or injury adjustment.</p>'+
     '<div class="scroll"><table><thead><tr><th>Sample</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+
@@ -668,7 +683,7 @@ function visualTeamSummary(away,home){
   const halfA=profile(away,"away","firstHalf"),halfH=profile(home,"home","firstHalf");
   const margins=[as.margin,hs.margin,qA,qH,halfA,halfH,ar?.margin??null,hr?.margin??null].filter(v=>v!==null&&Number.isFinite(v));
   const sharedMarginScale=Math.max(5,Math.ceil(Math.max(0,...margins)/5)*5,Math.ceil(Math.abs(Math.min(0,...margins))/5)*5);
-  return '<section class="panel team-visual"><h2>Matchup at a Glance</h2>'+
+  return '<section class="panel team-visual" id="gameVisualSummary"><h2>Matchup at a Glance</h2>'+
     '<span class="tv-tag">2025–26 historical data · not a live prediction</span>'+
     '<div class="tv-grid">'+card(away,as,ar)+card(home,hs,hr)+'</div>'+
     '<div class="tv-section"><h3>Who has the advantage?</h3>'+
@@ -686,6 +701,36 @@ function visualTeamSummary(away,home){
     (as.full!==null&&hs.full!==null?safe(away.team)+' averaged '+fmt(as.full)+' points and '+safe(home.team)+' averaged '+fmt(hs.full)+' points in the historical season. ':'Historical season scoring data are incomplete. ')+
     (ar&&hr?'In their verified last five games, '+safe(away.team)+' had a '+plus(ar.margin)+' scoring margin versus '+plus(hr.margin)+' for '+safe(home.team)+'.':'Last-five results cannot be confirmed from the available game dates and opponent records.')+
     ' Check current rosters, injuries, pace, and market prices before drawing a betting conclusion.</div></section>';
+}
+
+
+function matchupScoringLab(away,home,awayProfile,homeProfile){
+  const periods=[{name:"First Quarter",short:"1Q",index:0},{name:"First Half",short:"1H",index:1},{name:"Full Game",short:"FULL",index:2}];
+  const f=v=>v===null||!Number.isFinite(v)?"—":v.toFixed(1);
+  const panels=periods.map(p=>{
+    const a=awayProfile[p.index],h=homeProfile[p.index];
+    const av=experimentalEstimate(a.scored,h.allowed),hv=experimentalEstimate(h.scored,a.allowed);
+    const combined=av===null||hv===null?null:av+hv;
+    const max=Math.max(1,av??0,hv??0);
+    const bar=(label,v,color)=>'<div class="lab-bar-row"><span>'+safe(label)+'</span><div class="lab-bar-track">'+(v!==null?'<div class="lab-bar-fill" style="width:'+(v/max*100).toFixed(1)+'%;background:'+color+'"></div>':'')+'</div><strong>'+f(v)+'</strong></div>';
+    return '<div class="lab-period"><div class="lab-period-title">'+p.short+' · '+p.name+'</div>'+
+      '<div class="lab-total">'+f(combined)+'</div><div class="lab-caption">Combined historical scoring estimate</div>'+
+      bar(away.team,av,"#45aee8")+bar(home.team,hv,"#32e49a")+
+      '<div class="lab-caption">Away: '+f(a.scored)+' scored / '+f(a.allowed)+' allowed · Home: '+f(h.scored)+' scored / '+f(h.allowed)+' allowed</div></div>';
+  }).join("");
+  return '<section class="panel game-scoring-lab" id="gameScoringLab"><h2>Scoring Lab</h2>'+
+    '<p class="small">1Q, 1H and full-game comparisons. Each period compares the teams on the same scale. Estimates average historical scoring and opponent points allowed; they are not validated predictions.</p>'+
+    '<div class="lab-period-grid">'+panels+'</div>'+
+    '<div class="notice" style="margin-top:14px">A larger estimate is not automatically a betting advantage. Compare with verified current market lines, injuries, and pace before qualifying a market.</div></section>';
+}
+function gameInteriorNavigation(away,home){
+  return '<section class="panel game-interior-nav"><h2>'+safe(away.team)+' @ '+safe(home.team)+'</h2>'+
+    '<p class="small">Game Research · Historical 2025–26 data</p>'+
+    '<div class="game-nav-links">'+
+    '<a href="#gameVisualSummary">Matchup</a><a href="#gameFormIntelligence">Analysis</a>'+
+    '<a href="#gameScoringLab">Scoring Lab</a><a href="#gameMarketStatus">Markets</a>'+
+    '<button type="button" id="gamePlayersButton">Players →</button></div>'+
+    '<p class="small">Choose a section to jump directly to it. The original statistics remain available below.</p></section>';
 }
 
 function analyzeTeams(){
@@ -725,7 +770,9 @@ function analyzeTeams(){
   }).join("");
 
   $("teamResults").innerHTML=`
+    ${gameInteriorNavigation(away,home)}
     ${visualTeamSummary(away,home)}
+    ${matchupScoringLab(away,home,awayProfile,homeProfile)}
     <div class="panel">
       <h2>${safe(away.team)} @ ${safe(home.team)}</h2>
       <p class="small">
@@ -794,7 +841,7 @@ function analyzeTeams(){
     ${expandedTeamIntelligence(away,home)}
 
     <div class="panel">
-      <h3>Market Qualification</h3>
+      <h3 id="gameMarketStatus">Market Qualification</h3>
       <div class="notice">
         PASS — No validated projection and verified
         live market line are connected.
@@ -802,6 +849,8 @@ function analyzeTeams(){
     </div>`;
 
   renderMatchupPlayers();
+  const playerJump=$("gamePlayersButton");
+  if(playerJump)playerJump.addEventListener("click",()=>showTab("matchupPlayers"));
 }
 
 $("analyzeTeams").addEventListener("click",analyzeTeams);
