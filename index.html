@@ -78,6 +78,8 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .team-visual .tv-callout{background:#1b2c42;border-left:3px solid #f5c765;border-radius:8px;padding:14px;line-height:1.6;margin-top:12px}
 .team-visual .tv-tag{font-size:12px;color:#d6e2f1;background:#243a53;padding:5px 8px;border-radius:7px;display:inline-block;margin-bottom:10px}
 @media(max-width:390px){.team-visual .tv-card{padding:10px}.team-visual .tv-name{font-size:13px}}
+.team-visual .tv-zero-track{position:relative;overflow:hidden;background:linear-gradient(to right,#26354b 49.7%,#a4b8cc 49.7%,#a4b8cc 50.3%,#26354b 50.3%)}
+.team-visual .tv-zero-track .tv-fill{top:0;bottom:0;height:100%;min-width:0}
 </style>
 </head>
 <body>
@@ -647,8 +649,14 @@ function visualTeamSummary(away,home){
     '<div class="tv-label">Season scoring margin</div><div class="tv-value">'+plus(m.margin)+'</div>'+
     '<div class="tv-caption">'+(r?'Last 5: '+r.wins+' wins, '+r.losses+' losses · '+plus(r.margin)+' average margin':'Recent 5: verified chronology unavailable')+'</div></div>';
   const bars=(label,x,y)=>{
-    const maximum=Math.max(1,Math.abs(x??0),Math.abs(y??0));
-    const line=(name,value,homeSide)=>'<div class="tv-row"><span>'+safe(name)+'</span><div class="tv-track"><div class="tv-fill'+(homeSide?' home':'')+'" style="width:'+Math.max(0,Math.min(100,Math.abs(value??0)/maximum*100)).toFixed(1)+'%"></div></div><strong>'+plus(value)+'</strong></div>';
+    const line=(name,value,homeSide)=>{
+      const available=value!==null&&Number.isFinite(value);
+      const width=available?Math.min(50,Math.abs(value)/sharedMarginScale*50):0;
+      const left=available&&value<0?50-width:50;
+      return '<div class="tv-row"><span>'+safe(name)+'</span><div class="tv-track tv-zero-track">'+
+        (available?'<div class="tv-fill'+(homeSide?' home':'')+'" style="position:absolute;left:'+left.toFixed(2)+'%;width:'+width.toFixed(2)+'%"></div>':'')+
+        '</div><strong>'+plus(value)+'</strong></div>';
+    };
     return '<div class="tv-section"><strong>'+safe(label)+'</strong>'+line(away.team,x,false)+line(home.team,y,true)+'</div>';
   };
   const profile=(team,location,field)=>{
@@ -658,6 +666,8 @@ function visualTeamSummary(away,home){
   };
   const qA=profile(away,"away","q1"),qH=profile(home,"home","q1");
   const halfA=profile(away,"away","firstHalf"),halfH=profile(home,"home","firstHalf");
+  const margins=[as.margin,hs.margin,qA,qH,halfA,halfH,ar?.margin??null,hr?.margin??null].filter(v=>v!==null&&Number.isFinite(v));
+  const sharedMarginScale=Math.max(5,Math.ceil(Math.max(0,...margins)/5)*5,Math.ceil(Math.abs(Math.min(0,...margins))/5)*5);
   return '<section class="panel team-visual"><h2>Matchup at a Glance</h2>'+
     '<span class="tv-tag">2025–26 historical data · not a live prediction</span>'+
     '<div class="tv-grid">'+card(away,as,ar)+card(home,hs,hr)+'</div>'+
@@ -666,7 +676,8 @@ function visualTeamSummary(away,home){
     ' · <strong>Defense:</strong> '+leader(as.allowed,hs.allowed,false)+
     ' · <strong>Recent form:</strong> '+(ar&&hr?leader(ar.margin,hr.margin,true):'Insufficient verified data')+
     '<p class="tv-caption">Offense compares season points scored; defense compares points allowed (lower is better). Recent form compares last-five scoring margins where dates and opponent results are verified. These are descriptive advantages, not win probabilities.</p></div></div>'+
-    '<div class="tv-section"><h3>Scoring Margin Comparison</h3><p class="tv-caption">Bars show the magnitude of each team’s average margin; the signed number shows whether it outscored or was outscored by opponents. Each pair uses its own scale.</p>'+
+    '<div class="tv-section"><h3>Scoring Margin Comparison</h3><p class="tv-caption">All bars use the same scale, from negative to positive, centered at zero. A 1-point margin is always the same visual length in every comparison.</p>'+
+    '<p class="tv-caption">Common axis: −'+sharedMarginScale+' to +'+sharedMarginScale+' points · center line = 0</p>'+
     bars("Season · full game",as.margin,hs.margin)+
     bars("Road vs home · first quarter",qA,qH)+
     bars("Road vs home · first half",halfA,halfH)+
