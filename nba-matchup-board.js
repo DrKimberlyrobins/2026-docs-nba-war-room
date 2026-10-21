@@ -18,8 +18,8 @@
   if(!a||!h){status.textContent="This matchup could not be matched to both historical team records. No teams were guessed.";return;}
   document.getElementById("awayTeam").value=String(a.teamId);
   document.getElementById("homeTeam").value=String(h.teamId);
-  analyzeTeams();showTab("matchupPlayers");
-  document.getElementById("matchupPlayers").scrollIntoView({behavior:"smooth",block:"start"});
+  showTab("teams");analyzeTeams();
+  document.getElementById("teamResults").scrollIntoView({behavior:"smooth",block:"start"});
  }
  async function load(){
   cards.replaceChildren();status.textContent="Loading NBA schedule for each of the next 7 days…";
