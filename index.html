@@ -519,6 +519,80 @@ function experimentalEstimate(scored,allowed){
   return(scored+allowed)/2;
 }
 
+
+function expandedTeamIntelligence(away,home){
+  function records(team,location){
+    const logs=teamLogs(team).filter(g=>!location||g.homeAway===location);
+    return logs.map((g,i)=>{
+      const other=teamById.get(String(g.opponentId));
+      const counterpart=other&&teamLogs(other).find(x=>String(x.eventId)===String(g.eventId));
+      const result={eventId:g.eventId,homeAway:g.homeAway,opponent:other?.team||"Unknown",date:g.date||g.gameDate||g.startDate||null};
+      for(const field of ["q1","firstHalf","fullGame"]){
+        result[field]=numberOrNull(g[field]);
+        result[field+"Allowed"]=counterpart?numberOrNull(counterpart[field]):null;
+      }
+      return result;
+    });
+  }
+  function summarize(logs,field){
+    const valid=logs.filter(g=>g[field]!==null&&g[field+"Allowed"]!==null);
+    if(!valid.length)return null;
+    const scored=valid.reduce((a,g)=>a+g[field],0)/valid.length;
+    const allowed=valid.reduce((a,g)=>a+g[field+"Allowed"],0)/valid.length;
+    const wins=valid.filter(g=>g[field]>g[field+"Allowed"]).length;
+    const ties=valid.filter(g=>g[field]===g[field+"Allowed"]).length;
+    return {n:valid.length,total:logs.length,scored,allowed,margin:scored-allowed,wins,losses:valid.length-wins-ties,ties};
+  }
+  function form(team,location){
+    const all=records(team,location);
+    // ESPN-derived game logs are expected in chronological order; preserve source order
+    // when dates are absent, rather than inventing a chronology.
+    const dated=all.every(g=>g.date&&Number.isFinite(Date.parse(g.date)));
+    if(dated)all.sort((a,b)=>Date.parse(a.date)-Date.parse(b.date));
+    return {all,last5:dated?all.slice(-5):null,last10:dated?all.slice(-10):null,dated};
+  }
+  const a=form(away,"away"),h=form(home,"home");
+  const af=form(away,null),hf=form(home,null);
+  function fmt(v){return v===null||!Number.isFinite(v)?"—":v.toFixed(1);}
+  function wl(v){return v?v.wins+"-"+v.losses+(v.ties?" ("+v.ties+" tied)":""):"—";}
+  function row(label,ar,hr,field){
+    const x=ar?summarize(ar,field):null,y=hr?summarize(hr,field):null;
+    const cell=v=>v?fmt(v.scored)+" / "+fmt(v.allowed)+" / "+fmt(v.margin)+" ("+v.n+"/"+v.total+" games)":"—";
+    return "<tr><td>"+safe(label)+"</td><td>"+cell(x)+"</td><td>"+cell(y)+"</td></tr>";
+  }
+  function resultRow(label,ar,hr,field){
+    const x=ar?summarize(ar,field):null,y=hr?summarize(hr,field):null;
+    const cell=v=>v?wl(v)+" · "+v.n+"/"+v.total+" verified":"—";
+    return "<tr><td>"+safe(label)+"</td><td>"+cell(x)+"</td><td>"+cell(y)+"</td></tr>";
+  }
+  return '<div class="panel" id="expandedTeamIntelligence">'+
+    '<h3>Team Form & Defensive Intelligence</h3>'+
+    '<p class="small">2025–26 historical records only. Scored / Allowed / Margin; sample counts show matched opponent records. Road and home samples are separate from season samples. No current-season or injury adjustment.</p>'+
+    '<div class="scroll"><table><thead><tr><th>Sample</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+
+    row("Season • full game",af.all,hf.all,"fullGame")+
+    row("Road vs Home • full game",a.all,h.all,"fullGame")+
+    row("Last 5 • full game",af.last5,hf.last5,"fullGame")+
+    row("Last 10 • full game",af.last10,hf.last10,"fullGame")+
+    row("Last 5 • first half",af.last5,hf.last5,"firstHalf")+
+    row("Last 5 • first quarter",af.last5,hf.last5,"q1")+
+    '</tbody></table></div>'+
+    '<h3 style="margin-top:20px">Results by Period</h3>'+
+    '<p class="small">W–L records compare actual points scored with the same opponent’s points in that period; ties are shown separately. Quarter and half records are not game wins.</p>'+
+    '<div class="scroll"><table><thead><tr><th>Sample</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+
+    resultRow("Season • full game",af.all,hf.all,"fullGame")+
+    resultRow("Road vs Home • full game",a.all,h.all,"fullGame")+
+    resultRow("Season • first half",af.all,hf.all,"firstHalf")+
+    resultRow("Season • first quarter",af.all,hf.all,"q1")+
+    resultRow("Last 5 • full game",af.last5,hf.last5,"fullGame")+
+    resultRow("Last 10 • full game",af.last10,hf.last10,"fullGame")+
+    '</tbody></table></div>'+
+    (!af.dated||!hf.dated?'<div class="notice">Recent-form rows are unavailable because game dates were not verified in the historical logs. No last-5 or last-10 ordering has been guessed.</div>':'')+
+    '<h3 style="margin-top:20px">Advanced Efficiency Data Status</h3>'+
+    '<p class="small">Pace, offensive/defensive rating per 100 possessions, effective FG%, true shooting, turnover rate, and offensive/defensive rebound rate: <strong>not available from the verified team fields currently connected</strong>. These require possession and team box-score data, not estimates derived from points alone.</p>'+
+    '<div class="notice">Research only — historical descriptive statistics. No betting edge or market qualification is implied.</div>'+
+    '</div>';
+}
+
 function analyzeTeams(){
   const {away,home}=selectedTeams();
   if(!away||!home)return;
@@ -620,6 +694,8 @@ function analyzeTeams(){
         </table>
       </div>
     </div>
+
+    ${expandedTeamIntelligence(away,home)}
 
     <div class="panel">
       <h3>Market Qualification</h3>
