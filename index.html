@@ -792,9 +792,83 @@ function setInsideTab(tab){
 }
 
 
+
+const nbaVerifiedStats=new Map();
+const nbaVerifiedPending=new Map();
+const NBA_STAT_SEASON=2026;
+const nbaStatNames={
+ rebounds:["rebounds","totalRebounds"],offensiveRebounds:["offensiveRebounds"],defensiveRebounds:["defensiveRebounds"],
+ assists:["assists"],turnovers:["turnovers"],steals:["steals"],blocks:["blocks"],fouls:["fouls","personalFouls"],
+ fieldGoalsMade:["fieldGoalsMade"],fieldGoalPct:["fieldGoalPct","fieldGoalPercentage"],
+ threePointFieldGoalsMade:["threePointFieldGoalsMade","threePointersMade"],threePointFieldGoalPct:["threePointFieldGoalPct","threePointFieldGoalPercentage"],
+ freeThrowsMade:["freeThrowsMade"],freeThrowPct:["freeThrowPct","freeThrowPercentage"],
+ pace:["pace"],effectiveFieldGoalPct:["effectiveFieldGoalPct"],trueShootingPct:["trueShootingPct"],
+ offensiveRating:["offensiveRating"],defensiveRating:["defensiveRating"],netRating:["netRating"],
+ pointsInPaint:["pointsInPaint"],fastBreakPoints:["fastBreakPoints"],secondChancePoints:["secondChancePoints"],
+ pointsOffTurnovers:["pointsOffTurnovers"],benchPoints:["benchPoints"]
+};
+function nbaParseSeasonStats(payload){
+ const collected=new Map();
+ const walk=(obj,depth=0)=>{
+  if(!obj||depth>9)return;
+  if(Array.isArray(obj)){for(const child of obj)walk(child,depth+1);return;}
+  if(typeof obj!=="object")return;
+  const name=typeof obj.name==="string"?obj.name:null;
+  if(name&&(obj.value!==undefined||obj.displayValue!==undefined)){
+   const n=Number(obj.value??obj.displayValue);
+   if(Number.isFinite(n))collected.set(name,n);
+  }
+  for(const [k,v] of Object.entries(obj)){
+   if(k==="athletes"||k==="leaders"||k==="events"||k==="splits")continue;
+   if(v&&typeof v==="object")walk(v,depth+1);
+  }
+ };
+ walk(payload);
+ const output={};
+ for(const [field,aliases] of Object.entries(nbaStatNames)){
+  for(const alias of aliases){if(collected.has(alias)){output[field]=collected.get(alias);break;}}
+ }
+ return output;
+}
+async function nbaFetchVerifiedTeamStats(team){
+ const id=String(team.teamId);
+ if(nbaVerifiedStats.has(id))return nbaVerifiedStats.get(id);
+ if(nbaVerifiedPending.has(id))return nbaVerifiedPending.get(id);
+ const task=(async()=>{
+  try{
+   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/"+encodeURIComponent(id)+"/statistics?season="+NBA_STAT_SEASON+"&seasontype=2";
+   const response=await fetch(url,{headers:{Accept:"application/json"}});
+   if(!response.ok)throw Error("ESPN HTTP "+response.status);
+   const payload=await response.json();
+   const parsed=nbaParseSeasonStats(payload);
+   if(Object.keys(parsed).length===0)throw Error("No recognized season-stat fields");
+   nbaVerifiedStats.set(id,parsed);return parsed;
+  }catch(e){return null;}
+  finally{nbaVerifiedPending.delete(id);}
+ })();
+ nbaVerifiedPending.set(id,task);return task;
+}
+async function nbaLoadMatchupStatistics(away,home){
+ const host=document.getElementById("teamResults");
+ const target=host?.querySelector("#nbaVerifiedStatStatus");
+ if(!target)return;
+ const results=await Promise.all([nbaFetchVerifiedTeamStats(away),nbaFetchVerifiedTeamStats(home)]);
+ if(!target.isConnected)return;
+ const count=results.map(x=>x?Object.keys(x).length:0);
+ target.textContent=count.every(Boolean)?
+  "ESPN 2025–26 season statistics loaded ("+count.join(" / ")+" metrics).":
+  "ESPN season-stat data unavailable or incomplete. Historical scoring remains visible; missing fields show —.";
+ const current=host.querySelector(".full-stat-dashboard");
+ if(!current)return;
+ const doc=new DOMParser().parseFromString(fullTeamStatDashboard(away,home),"text/html");
+ const updated=doc.querySelector(".full-stat-dashboard");
+ if(updated){updated.querySelector("#nbaVerifiedStatStatus").textContent=target.textContent;current.replaceWith(updated);}
+}
+
 function fullTeamStatDashboard(away,home){
  const all=Array.from(teamById.values());
  const get=(t,k)=>{
+  if(k&&nbaVerifiedStats.has(String(t.teamId))&&Number.isFinite(nbaVerifiedStats.get(String(t.teamId))[k]))return nbaVerifiedStats.get(String(t.teamId))[k];
   const logs=teamLogs(t), scored=avg(logs,"fullGame"),allowed=opponentAllowed(t,"fullGame",null).value;
   if(k==="points")return scored;
   if(k==="allowed")return allowed;
@@ -810,24 +884,24 @@ function fullTeamStatDashboard(away,home){
  const groups=[
   ["Scoring & defense",[
    ["Points per game","points",false],["Points allowed","allowed",true],["Scoring margin","margin",false],
-   ["Rebounds",null],["Offensive rebounds",null],["Defensive rebounds",null],["Assists",null],["Turnovers",null,true],["Steals",null],["Blocks",null],["Fouls",null,true]]],
+   ["Rebounds","rebounds"],["Offensive rebounds","offensiveRebounds"],["Defensive rebounds","defensiveRebounds"],["Assists","assists"],["Turnovers","turnovers",true],["Steals","steals"],["Blocks","blocks"],["Fouls","fouls",true]]],
   ["Shooting",[
-   ["Field goals made",null],["Field goal %",null],["3-pointers made",null],["3-point %",null],["Free throws made",null],["Free throw %",null]]],
+   ["Field goals made","fieldGoalsMade"],["Field goal %","fieldGoalPct"],["3-pointers made","threePointFieldGoalsMade"],["3-point %","threePointFieldGoalPct"],["Free throws made","freeThrowsMade"],["Free throw %","freeThrowPct"]]],
   ["Advanced efficiency",[
-   ["Pace",null],["Effective FG %",null],["True shooting %",null],["Offensive rating",null],["Defensive rating",null,true],["Net rating",null]]],
+   ["Pace","pace"],["Effective FG %","effectiveFieldGoalPct"],["True shooting %","trueShootingPct"],["Offensive rating","offensiveRating"],["Defensive rating","defensiveRating",true],["Net rating","netRating"]]],
   ["Scoring sources",[
-   ["Points in paint",null],["Fast-break points",null],["Second-chance points",null],["Points off turnovers",null],["Bench points",null]]]
+   ["Points in paint","pointsInPaint"],["Fast-break points","fastBreakPoints"],["Second-chance points","secondChancePoints"],["Points off turnovers","pointsOffTurnovers"],["Bench points","benchPoints"]]]
  ];
  const fmt=x=>x===null||!Number.isFinite(x)?"—":x.toFixed(1);
  const rows=groups.map(([name,metrics])=>'<tr class="stat-group"><th colspan="3">'+name+'</th></tr>'+metrics.map(([label,key,lower])=>{
   const a=key?get(away,key):null,h=key?get(home,key):null;
-  const winner=a!==null&&h!==null&&Math.abs(a-h)>=0.05?(lower?a<h:a>h?"away":"home"):"";
+  const winner=a!==null&&h!==null&&Math.abs(a-h)>=0.05?((lower?a<h:a>h)?"away":"home"):"";
   const cell=(team,v,side)=>'<td class="'+(winner===side?"stat-leader":"")+'"><strong>'+fmt(v)+'</strong>'+(key&&v!==null&&rank(team,key,!!lower)?'<small>Rank '+rank(team,key,!!lower)+'</small>':'')+'</td>';
   return '<tr><th scope="row">'+label+'</th>'+cell(away,a,"away")+cell(home,h,"home")+'</tr>';
  }).join("")).join("");
  return '<section class="panel full-stat-dashboard"><h2>Complete Team Statistics</h2>'+
-  '<p class="small">2025–26 historical season · Points, points allowed, and margin are calculated from verified matched game records. Rankings appear only with sufficient team coverage. Unavailable metrics are never estimated.</p>'+
-  '<div class="scroll"><table class="full-stat-table"><thead><tr><th>STAT</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  '<p class="small">2025–26 historical season · Scoring from matched game logs; additional statistics from ESPN when available. Missing metrics remain unavailable.</p>'+
+  '<div class="small" id="nbaVerifiedStatStatus">Checking ESPN season statistics…</div><div class="scroll"><table class="full-stat-table"><thead><tr><th>STAT</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
   '<p class="small">— = not connected to a verified team-stat source. A highlighted number indicates a descriptive advantage, not a betting edge.</p></section>';
 }
 
@@ -1006,6 +1080,7 @@ function analyzeTeams(){
     </div></div>`;
 
   renderMatchupPlayers();
+  nbaLoadMatchupStatistics(away,home);
   $("teamResults").querySelectorAll(".inside-tab").forEach(btn=>btn.addEventListener("click",()=>setInsideTab(btn.dataset.inside)));
   const playerJump=$("gamePlayersButton");
   if(playerJump)playerJump.addEventListener("click",()=>showTab("matchupPlayers"));
