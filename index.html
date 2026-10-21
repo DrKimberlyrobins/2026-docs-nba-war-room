@@ -831,7 +831,7 @@ function nbaParseSeasonStats(payload){
  for(const alias of gamesAliases){const n=collected.get(alias);if(Number.isInteger(n)&&n>0&&n<=100){gp=n;break;}}
  const output={};
  for(const [field,aliases] of Object.entries(nbaStatNames)){
-  for(const alias of aliases){if(collected.has(alias)){output[field]=collected.get(alias);break;}}
+  for(const alias of aliases){if(collected.has(alias)){const raw=collected.get(alias);if(nbaSeasonTotals.has(field)){if(gp!==null)output[field]=raw/gp;}else output[field]=raw;break;}}
  }
  return {stats:output,gamesPlayed:gp};
 }
@@ -859,7 +859,7 @@ async function nbaLoadMatchupStatistics(away,home){
  const target=host?.querySelector("#nbaVerifiedStatStatus");
  if(!target)return;
  const results=await Promise.all([nbaFetchVerifiedTeamStats(away),nbaFetchVerifiedTeamStats(home)]);
- if(!target.isConnected)return;
+ if(!target.isConnected||host.querySelector("#nbaVerifiedStatStatus")!==target)return;
  const count=results.map(x=>x?Object.keys(x).length:0);
  target.textContent=count.every(Boolean)?
   "ESPN season metrics normalized to per-game when verified ("+count.join(" / ")+" metrics).":
@@ -883,7 +883,7 @@ function fullTeamStatDashboard(away,home){
  };
  const rank=(team,k,lower)=>{
   const rows=all.map(t=>({id:String(t.teamId),v:get(t,k)})).filter(r=>r.v!==null&&Number.isFinite(r.v));
-  const val=get(team,k);if(val===null||rows.length<25)return null;
+  const val=get(team,k);if(val===null||rows.length<30||rows.some(r=>r.id===String(team.teamId))===false)return null;
   const place=1+rows.filter(r=>lower?r.v<val:r.v>val).length;
   return place+" / "+rows.length;
  };
