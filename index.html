@@ -798,6 +798,7 @@ const nbaVerifiedPending=new Map();
 const NBA_STAT_SEASON=2026;
 const nbaSeasonTotals=new Set(["rebounds","offensiveRebounds","defensiveRebounds","assists","turnovers","steals","blocks","fouls","fieldGoalsMade","threePointFieldGoalsMade","freeThrowsMade","pointsInPaint","fastBreakPoints","secondChancePoints","pointsOffTurnovers","benchPoints"]);
 const nbaStatDenominators=new Map();
+const nbaStatLoadFailures=new Map();
 const nbaStatNames={
  rebounds:["rebounds","totalRebounds"],offensiveRebounds:["offensiveRebounds"],defensiveRebounds:["defensiveRebounds"],
  assists:["assists"],turnovers:["turnovers"],steals:["steals"],blocks:["blocks"],fouls:["fouls","personalFouls"],
@@ -848,8 +849,9 @@ async function nbaFetchVerifiedTeamStats(team){
    const parsed=nbaParseSeasonStats(payload);
    if(Object.keys(parsed.stats).length===0)throw Error("No recognized season-stat fields or verified games-played denominator");
    nbaStatDenominators.set(id,parsed.gamesPlayed);
+   nbaStatLoadFailures.delete(id);
    nbaVerifiedStats.set(id,parsed.stats);return parsed.stats;
-  }catch(e){return null;}
+  }catch(e){nbaStatLoadFailures.set(id,String(e?.message||e));return null;}
   finally{nbaVerifiedPending.delete(id);}
  })();
  nbaVerifiedPending.set(id,task);return task;
@@ -898,7 +900,7 @@ function fullTeamStatDashboard(away,home){
   ["Scoring sources",[
    ["Points in paint","pointsInPaint"],["Fast-break points","fastBreakPoints"],["Second-chance points","secondChancePoints"],["Points off turnovers","pointsOffTurnovers"],["Bench points","benchPoints"]]]
  ];
- const fmt=x=>x===null||!Number.isFinite(x)?"—":x.toFixed(1);
+ const fmt=(x,k)=>x===null||!Number.isFinite(x)?"—":(/Pct$/.test(k)?(x<=1?x*100:x).toFixed(1)+"%":x.toFixed(1));
  const rows=groups.map(([name,metrics])=>'<tr class="stat-group"><th colspan="3">'+name+'</th></tr>'+metrics.map(([label,key,lower])=>{
   const a=key?get(away,key):null,h=key?get(home,key):null;
   const winner=a!==null&&h!==null&&Math.abs(a-h)>=0.05?((lower?a<h:a>h)?"away":"home"):"";
@@ -908,7 +910,7 @@ function fullTeamStatDashboard(away,home){
  return '<section class="panel full-stat-dashboard"><h2>Complete Team Statistics</h2>'+
   '<p class="small">2025–26 historical season · Scoring from matched game logs; additional statistics from ESPN when available. Missing metrics remain unavailable.</p>'+
   '<div class="small" id="nbaVerifiedStatStatus">Checking ESPN season statistics…</div><div class="scroll"><table class="full-stat-table"><thead><tr><th>STAT</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-  '<p class="small">— = not connected to a verified team-stat source. A highlighted number indicates a descriptive advantage, not a betting edge.</p></section>';
+  '<p class="small">— = not connected to a verified team-stat source. Season totals are converted to per-game only with confirmed games played. Shooting percentages are displayed as percentages. A highlighted number indicates a descriptive advantage, not a betting edge.</p></section>';
 }
 
 function matchupComparisonBoard(away,home){
