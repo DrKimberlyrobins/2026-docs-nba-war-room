@@ -95,6 +95,17 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .game-scoring-lab .lab-bar-track{height:12px;border-radius:8px;background:#28394e;overflow:hidden}
 .game-scoring-lab .lab-bar-fill{height:100%;border-radius:8px}
 @media(max-width:760px){.game-scoring-lab .lab-period-grid{grid-template-columns:1fr}}
+
+#teamResults [hidden]{display:none!important}
+.inside-hero{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);gap:8px;align-items:center;text-align:center;padding:10px 0 16px}
+.inside-team{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.inside-team strong{font-size:clamp(13px,2.7vw,20px);overflow-wrap:anywhere}
+.inside-team span{color:var(--muted);font-size:12px}
+.inside-team-logo{width:clamp(52px,10vw,85px);height:clamp(52px,10vw,85px);object-fit:contain}
+.inside-versus{font-size:22px;color:var(--green);font-weight:700}
+.game-interior-nav .game-nav-links{flex-wrap:nowrap;overflow-x:auto;padding:5px 0 10px;scrollbar-width:thin}
+.game-interior-nav .game-nav-links button{flex:0 0 auto;white-space:nowrap}
+.game-interior-nav .game-nav-links button.active{background:var(--gold);color:#081321;border-color:var(--gold)}
 </style>
 </head>
 <body>
@@ -724,13 +735,24 @@ function matchupScoringLab(away,home,awayProfile,homeProfile){
     '<div class="notice" style="margin-top:14px">A larger estimate is not automatically a betting advantage. Compare with verified current market lines, injuries, and pace before qualifying a market.</div></section>';
 }
 function gameInteriorNavigation(away,home){
-  return '<section class="panel game-interior-nav"><h2>'+safe(away.team)+' @ '+safe(home.team)+'</h2>'+
-    '<p class="small">Game Research · Historical 2025–26 data</p>'+
-    '<div class="game-nav-links">'+
-    '<a href="#gameVisualSummary">Matchup</a><a href="#gameFormIntelligence">Analysis</a>'+
-    '<a href="#gameScoringLab">Scoring Lab</a><a href="#gameMarketStatus">Markets</a>'+
-    '<button type="button" id="gamePlayersButton">Players →</button></div>'+
-    '<p class="small">Choose a section to jump directly to it. The original statistics remain available below.</p></section>';
+ const abbr=team=>String(team.abbreviation||team.team||"").trim().toLowerCase();
+ const logo=team=>'<img class="inside-team-logo" src="https://a.espncdn.com/i/teamlogos/nba/500/'+safe(abbr(team))+'.png" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+ return '<section class="panel game-interior-nav"><div class="inside-hero">'+
+ '<div class="inside-team">'+logo(away)+'<strong>'+safe(away.team)+'</strong><span>Away</span></div>'+
+ '<div class="inside-versus">@</div>'+
+ '<div class="inside-team">'+logo(home)+'<strong>'+safe(home.team)+'</strong><span>Home</span></div></div>'+
+ '<p class="small">Historical 2025–26 research · not a current-season forecast</p>'+
+ '<div class="game-nav-links" role="tablist" aria-label="Matchup research">'+
+ '<button type="button" class="inside-tab active" data-inside="matchup" role="tab" aria-selected="true">Matchup</button>'+
+ '<button type="button" class="inside-tab" data-inside="analysis" role="tab" aria-selected="false">Analysis</button>'+
+ '<button type="button" class="inside-tab" data-inside="scoring" role="tab" aria-selected="false">Scoring Lab</button>'+
+ '<button type="button" class="inside-tab" data-inside="markets" role="tab" aria-selected="false">Markets</button>'+
+ '<button type="button" id="gamePlayersButton">Players →</button></div></section>';
+}
+function setInsideTab(tab){
+ const root=$("teamResults");if(!root)return;
+ root.querySelectorAll("[data-inside-panel]").forEach(el=>{el.hidden=el.dataset.insidePanel!==tab});
+ root.querySelectorAll(".inside-tab").forEach(btn=>{const selected=btn.dataset.inside===tab;btn.classList.toggle("active",selected);btn.setAttribute("aria-selected",String(selected))});
 }
 
 function analyzeTeams(){
@@ -771,8 +793,11 @@ function analyzeTeams(){
 
   $("teamResults").innerHTML=`
     ${gameInteriorNavigation(away,home)}
-    ${visualTeamSummary(away,home)}
-    ${matchupScoringLab(away,home,awayProfile,homeProfile)}
+    <div data-inside-panel="matchup">${visualTeamSummary(away,home)}</div>
+    <div data-inside-panel="scoring" hidden>
+    ${matchupScoringLab(away,home,awayProfile,homeProfile)}</div>
+    <div data-inside-panel="analysis" hidden>${expandedTeamIntelligence(away,home)}</div>
+    <div data-inside-panel="matchup">
     <div class="panel">
       <h2>${safe(away.team)} @ ${safe(home.team)}</h2>
       <p class="small">
@@ -838,17 +863,17 @@ function analyzeTeams(){
       </div>
     </div>
 
-    ${expandedTeamIntelligence(away,home)}
-
-    <div class="panel">
+    </div>
+    <div data-inside-panel="markets" hidden><div class="panel">
       <h3 id="gameMarketStatus">Market Qualification</h3>
       <div class="notice">
         PASS — No validated projection and verified
         live market line are connected.
       </div>
-    </div>`;
+    </div></div>`;
 
   renderMatchupPlayers();
+  $("teamResults").querySelectorAll(".inside-tab").forEach(btn=>btn.addEventListener("click",()=>setInsideTab(btn.dataset.inside)));
   const playerJump=$("gamePlayersButton");
   if(playerJump)playerJump.addEventListener("click",()=>showTab("matchupPlayers"));
 }
