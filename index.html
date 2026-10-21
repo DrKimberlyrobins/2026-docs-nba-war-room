@@ -796,6 +796,8 @@ function setInsideTab(tab){
 const nbaVerifiedStats=new Map();
 const nbaVerifiedPending=new Map();
 const NBA_STAT_SEASON=2026;
+const nbaSeasonTotals=new Set(["rebounds","offensiveRebounds","defensiveRebounds","assists","turnovers","steals","blocks","fouls","fieldGoalsMade","threePointFieldGoalsMade","freeThrowsMade","pointsInPaint","fastBreakPoints","secondChancePoints","pointsOffTurnovers","benchPoints"]);
+const nbaStatDenominators=new Map();
 const nbaStatNames={
  rebounds:["rebounds","totalRebounds"],offensiveRebounds:["offensiveRebounds"],defensiveRebounds:["defensiveRebounds"],
  assists:["assists"],turnovers:["turnovers"],steals:["steals"],blocks:["blocks"],fouls:["fouls","personalFouls"],
@@ -824,11 +826,14 @@ function nbaParseSeasonStats(payload){
   }
  };
  walk(payload);
+ const gamesAliases=["gamesPlayed","games","GP"];
+ let gp=null;
+ for(const alias of gamesAliases){const n=collected.get(alias);if(Number.isInteger(n)&&n>0&&n<=100){gp=n;break;}}
  const output={};
  for(const [field,aliases] of Object.entries(nbaStatNames)){
   for(const alias of aliases){if(collected.has(alias)){output[field]=collected.get(alias);break;}}
  }
- return output;
+ return {stats:output,gamesPlayed:gp};
 }
 async function nbaFetchVerifiedTeamStats(team){
  const id=String(team.teamId);
@@ -841,8 +846,9 @@ async function nbaFetchVerifiedTeamStats(team){
    if(!response.ok)throw Error("ESPN HTTP "+response.status);
    const payload=await response.json();
    const parsed=nbaParseSeasonStats(payload);
-   if(Object.keys(parsed).length===0)throw Error("No recognized season-stat fields");
-   nbaVerifiedStats.set(id,parsed);return parsed;
+   if(Object.keys(parsed.stats).length===0)throw Error("No recognized season-stat fields or verified games-played denominator");
+   nbaStatDenominators.set(id,parsed.gamesPlayed);
+   nbaVerifiedStats.set(id,parsed.stats);return parsed.stats;
   }catch(e){return null;}
   finally{nbaVerifiedPending.delete(id);}
  })();
@@ -856,8 +862,8 @@ async function nbaLoadMatchupStatistics(away,home){
  if(!target.isConnected)return;
  const count=results.map(x=>x?Object.keys(x).length:0);
  target.textContent=count.every(Boolean)?
-  "ESPN 2025–26 season statistics loaded ("+count.join(" / ")+" metrics).":
-  "ESPN season-stat data unavailable or incomplete. Historical scoring remains visible; missing fields show —.";
+  "ESPN season metrics normalized to per-game when verified ("+count.join(" / ")+" metrics).":
+  "ESPN season-stat data unavailable or missing verified games played. Historical scoring remains visible; missing fields show —.";
  const current=host.querySelector(".full-stat-dashboard");
  if(!current)return;
  const doc=new DOMParser().parseFromString(fullTeamStatDashboard(away,home),"text/html");
