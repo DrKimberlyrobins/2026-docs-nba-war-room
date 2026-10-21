@@ -62,6 +62,22 @@ footer{padding:25px;text-align:center;color:var(--muted)}
   main{padding:12px}
   .modalbox{padding:14px}
 }
+
+/* Visual team intelligence — scoped so player props and receipts remain unchanged */
+.team-visual .tv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.team-visual .tv-card{background:#182a43;border:1px solid #3c5370;border-radius:12px;padding:15px;min-width:0}
+.team-visual .tv-name{font-weight:700;color:#f5c765;font-size:16px;margin-bottom:12px}
+.team-visual .tv-label{font-size:12px;color:#b7c8dd;margin-top:11px}
+.team-visual .tv-value{font-size:clamp(19px,4vw,28px);font-weight:800;margin:3px 0}
+.team-visual .tv-caption{font-size:12px;color:#b7c8dd;line-height:1.5}
+.team-visual .tv-section{margin-top:20px}
+.team-visual .tv-row{display:grid;grid-template-columns:minmax(70px,110px) 1fr 52px;gap:10px;align-items:center;margin:11px 0;font-size:13px}
+.team-visual .tv-track{height:13px;border-radius:10px;background:#28394e;overflow:hidden}
+.team-visual .tv-fill{height:100%;border-radius:10px;background:#40a9e5}
+.team-visual .tv-fill.home{background:#32e49a}
+.team-visual .tv-callout{background:#1b2c42;border-left:3px solid #f5c765;border-radius:8px;padding:14px;line-height:1.6;margin-top:12px}
+.team-visual .tv-tag{font-size:12px;color:#d6e2f1;background:#243a53;padding:5px 8px;border-radius:7px;display:inline-block;margin-bottom:10px}
+@media(max-width:390px){.team-visual .tv-card{padding:10px}.team-visual .tv-name{font-size:13px}}
 </style>
 </head>
 <body>
@@ -593,6 +609,74 @@ function expandedTeamIntelligence(away,home){
     '</div>';
 }
 
+
+function visualTeamSummary(away,home){
+  const metrics=(team,location)=>{
+    const logs=teamLogs(team).filter(g=>!location||g.homeAway===location);
+    const full=avg(logs,"fullGame"),allowed=opponentAllowed(team,"fullGame",location).value;
+    return {full,allowed,margin:full!==null&&allowed!==null?full-allowed:null,logs};
+  };
+  const a=metrics(away,"away"),h=metrics(home,"home");
+  const as=metrics(away,null),hs=metrics(home,null);
+  const recent=(team)=>{
+    const logs=teamLogs(team).slice();
+    if(!logs.length||!logs.every(g=>(g.date||g.gameDate||g.startDate)&&Number.isFinite(Date.parse(g.date||g.gameDate||g.startDate))))return null;
+    logs.sort((x,y)=>Date.parse(x.date||x.gameDate||x.startDate)-Date.parse(y.date||y.gameDate||y.startDate));
+    const last=logs.slice(-5);
+    const vals=last.map(g=>{
+      const opp=teamById.get(String(g.opponentId));
+      const same=opp&&teamLogs(opp).find(x=>String(x.eventId)===String(g.eventId));
+      return {scored:numberOrNull(g.fullGame),allowed:same?numberOrNull(same.fullGame):null};
+    });
+    if(vals.some(v=>v.scored===null||v.allowed===null))return null;
+    const scored=vals.reduce((sum,v)=>sum+v.scored,0)/vals.length;
+    const allowed=vals.reduce((sum,v)=>sum+v.allowed,0)/vals.length;
+    return {scored,allowed,margin:scored-allowed,wins:vals.filter(v=>v.scored>v.allowed).length,losses:vals.filter(v=>v.scored<v.allowed).length};
+  };
+  const ar=recent(away),hr=recent(home);
+  const fmt=n=>n===null||!Number.isFinite(n)?"—":n.toFixed(1);
+  const plus=n=>n===null||!Number.isFinite(n)?"—":(n>0?"+":"")+n.toFixed(1);
+  const leader=(x,y,higher)=>{
+    if(x===null||y===null)return "Insufficient verified data";
+    if(Math.abs(x-y)<0.05)return "Essentially even";
+    return safe((higher?(x>y):(x<y))?away.team:home.team);
+  };
+  const card=(team,m,r)=>'<div class="tv-card"><div class="tv-name">'+safe(team.team)+'</div>'+
+    '<div class="tv-label">Season scoring average</div><div class="tv-value">'+fmt(m.full)+'</div>'+
+    '<div class="tv-label">Points allowed per game</div><div class="tv-value">'+fmt(m.allowed)+'</div>'+
+    '<div class="tv-label">Season scoring margin</div><div class="tv-value">'+plus(m.margin)+'</div>'+
+    '<div class="tv-caption">'+(r?'Last 5: '+r.wins+' wins, '+r.losses+' losses · '+plus(r.margin)+' average margin':'Recent 5: verified chronology unavailable')+'</div></div>';
+  const bars=(label,x,y)=>{
+    const maximum=Math.max(1,Math.abs(x??0),Math.abs(y??0));
+    const line=(name,value,homeSide)=>'<div class="tv-row"><span>'+safe(name)+'</span><div class="tv-track"><div class="tv-fill'+(homeSide?' home':'')+'" style="width:'+Math.max(0,Math.min(100,Math.abs(value??0)/maximum*100)).toFixed(1)+'%"></div></div><strong>'+plus(value)+'</strong></div>';
+    return '<div class="tv-section"><strong>'+safe(label)+'</strong>'+line(away.team,x,false)+line(home.team,y,true)+'</div>';
+  };
+  const profile=(team,location,field)=>{
+    const logs=teamLogs(team).filter(g=>g.homeAway===location);
+    const scored=avg(logs,field),allowed=opponentAllowed(team,field,location).value;
+    return scored===null||allowed===null?null:scored-allowed;
+  };
+  const qA=profile(away,"away","q1"),qH=profile(home,"home","q1");
+  const halfA=profile(away,"away","firstHalf"),halfH=profile(home,"home","firstHalf");
+  return '<section class="panel team-visual"><h2>Matchup at a Glance</h2>'+
+    '<span class="tv-tag">2025–26 historical data · not a live prediction</span>'+
+    '<div class="tv-grid">'+card(away,as,ar)+card(home,hs,hr)+'</div>'+
+    '<div class="tv-section"><h3>Who has the advantage?</h3>'+
+    '<div class="tv-callout"><strong>Offense:</strong> '+leader(as.full,hs.full,true)+
+    ' · <strong>Defense:</strong> '+leader(as.allowed,hs.allowed,false)+
+    ' · <strong>Recent form:</strong> '+(ar&&hr?leader(ar.margin,hr.margin,true):'Insufficient verified data')+
+    '<p class="tv-caption">Offense compares season points scored; defense compares points allowed (lower is better). Recent form compares last-five scoring margins where dates and opponent results are verified. These are descriptive advantages, not win probabilities.</p></div></div>'+
+    '<div class="tv-section"><h3>Scoring Margin Comparison</h3><p class="tv-caption">Bars show the magnitude of each team’s average margin; the signed number shows whether it outscored or was outscored by opponents. Each pair uses its own scale.</p>'+
+    bars("Season · full game",as.margin,hs.margin)+
+    bars("Road vs home · first quarter",qA,qH)+
+    bars("Road vs home · first half",halfA,halfH)+
+    bars("Recent 5 · full game",ar?.margin??null,hr?.margin??null)+
+    '</div><div class="tv-callout"><strong>What this means:</strong> '+
+    (as.full!==null&&hs.full!==null?safe(away.team)+' averaged '+fmt(as.full)+' points and '+safe(home.team)+' averaged '+fmt(hs.full)+' points in the historical season. ':'Historical season scoring data are incomplete. ')+
+    (ar&&hr?'In their verified last five games, '+safe(away.team)+' had a '+plus(ar.margin)+' scoring margin versus '+plus(hr.margin)+' for '+safe(home.team)+'.':'Last-five results cannot be confirmed from the available game dates and opponent records.')+
+    ' Check current rosters, injuries, pace, and market prices before drawing a betting conclusion.</div></section>';
+}
+
 function analyzeTeams(){
   const {away,home}=selectedTeams();
   if(!away||!home)return;
@@ -630,6 +714,7 @@ function analyzeTeams(){
   }).join("");
 
   $("teamResults").innerHTML=`
+    ${visualTeamSummary(away,home)}
     <div class="panel">
       <h2>${safe(away.team)} @ ${safe(home.team)}</h2>
       <p class="small">
