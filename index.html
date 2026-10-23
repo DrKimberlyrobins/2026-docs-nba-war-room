@@ -139,6 +139,7 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 .full-stat-table .stat-leader strong{color:#35dda0}
 .full-stat-dashboard .scroll{max-height:680px;overflow:auto}
 @media(max-width:550px){.full-stat-table th,.full-stat-table td{padding:9px 5px;font-size:12px}.full-stat-table td{font-size:14px}}
+.doc-leader-category{padding:14px 0;border-bottom:1px solid #30445f}.doc-leader-category h3{margin:0 0 12px;color:#f5c765}.doc-leader-category h4{margin:6px 0 10px}.doc-leader-row{display:grid;grid-template-columns:30px minmax(0,1fr) 55px 48px;align-items:center;gap:5px;padding:9px 5px;border-bottom:1px solid #30445f}.doc-leader-row strong{text-align:right}.doc-leader-row small{color:#a5b7cd;text-align:right}.doc-leader-rank{color:#32e49a;font-weight:bold}.doc-leaders .two>div{min-width:0}.doc-leaders .linkbutton{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -780,11 +781,59 @@ function gameInteriorNavigation(away,home){
  '<p class="small">Historical 2025–26 research · not a current-season forecast</p>'+
  '<div class="game-nav-links" role="tablist" aria-label="Matchup research">'+
  '<button type="button" class="inside-tab active" data-inside="matchup" role="tab" aria-selected="true">Matchup</button>'+
+ '<button type="button" class="inside-tab" data-inside="leaders" role="tab" aria-selected="false">Top Performers</button>'+
  '<button type="button" class="inside-tab" data-inside="analysis" role="tab" aria-selected="false">Analysis</button>'+
  '<button type="button" class="inside-tab" data-inside="scoring" role="tab" aria-selected="false">Scoring Lab</button>'+
  '<button type="button" class="inside-tab" data-inside="markets" role="tab" aria-selected="false">Markets</button>'+
  '<button type="button" id="gamePlayersButton">Players →</button></div></section>';
 }
+
+/* Top Performers Intelligence: verified historical player dataset, no invented values. */
+const DOC_LEADER_CATEGORIES=[
+ ["points","🏀 Points","points"],["rebounds","💪 Rebounds","rebounds"],
+ ["assists","🎮 Assists","assists"],["threes","🎯 3-Pointers","threes"],
+ ["blocks","🛡️ Blocks","blocks"],["steals","⚡ Steals","steals"]
+];
+function docLeaderValue(player,key,period="season"){
+ const source=period==="season"?player.seasonAverages:
+   period==="last5"?(player.last5?.complete?player.last5.averages:null):
+   (player.last10?.complete?player.last10.averages:null);
+ const raw=source?.[key];
+ return raw===null||raw===undefined||raw===""||!Number.isFinite(Number(raw))?null:Number(raw);
+}
+function docLeaderTable(team,category,period){
+ const roster=rosterForTeam(team.team);
+ const ranked=roster.map(p=>({p,v:docLeaderValue(p,category,period)}))
+   .filter(x=>x.v!==null).sort((a,b)=>b.v-a.v).slice(0,3);
+ if(!ranked.length)return '<p class="small">No verified values available for this category.</p>';
+ return ranked.map((x,i)=>'<div class="doc-leader-row"><span class="doc-leader-rank">#'+(i+1)+'</span>'+
+ '<button type="button" class="linkbutton" data-doc-leader="'+safe(x.p.playerId)+'">'+safe(x.p.name)+'</button>'+
+ '<strong>'+x.v.toFixed(1)+'</strong><small>'+safe(x.p.gamesPlayed)+' GP</small></div>').join("");
+}
+function docRenderLeaders(away,home,period="season"){
+ const el=document.getElementById("docLeadersBody");if(!el)return;
+ const label=period==="season"?"Season average":period==="last5"?"Last 5 average":"Last 10 average";
+ el.innerHTML=DOC_LEADER_CATEGORIES.map(([key,title])=>
+ '<div class="doc-leader-category"><h3>'+title+' <span class="small">· '+label+'</span></h3>'+
+ '<div class="two"><div><h4>'+safe(away.team)+'</h4>'+docLeaderTable(away,key,period)+'</div>'+
+ '<div><h4>'+safe(home.team)+'</h4>'+docLeaderTable(home,key,period)+'</div></div></div>').join("");
+}
+function docTopPerformers(away,home){
+ return '<section class="panel doc-leaders" id="docTopPerformers">'+
+ '<h2>🏆 Top Performers Intelligence</h2>'+
+ '<p class="small">Verified historical 2025–26 player averages, grouped by last recorded team — NOT confirmed current rosters or 2026–27 projections. Players with missing stats are excluded. Click a player for their intelligence profile.</p>'+
+ '<div class="actions"><label for="docLeaderPeriod">Stat window</label>'+
+ '<select id="docLeaderPeriod" style="width:auto"><option value="season">Season</option><option value="last5">Last 5 (complete only)</option><option value="last10">Last 10 (complete only)</option></select></div>'+
+ '<div id="docLeadersBody"></div>'+
+ '<p class="notice">Historical research only. Current-season games, verified injuries, defensive matchup, and live Kambi/Kalshi lines must be checked before evaluating a prop. No automatic betting qualification.</p></section>';
+}
+function docInitLeaders(away,home){
+ const root=document.getElementById("docTopPerformers");if(!root)return;
+ docRenderLeaders(away,home);
+ root.querySelector("#docLeaderPeriod")?.addEventListener("change",e=>docRenderLeaders(away,home,e.target.value));
+ root.addEventListener("click",e=>{const b=e.target.closest("[data-doc-leader]");if(b)openPlayer(b.dataset.docLeader);});
+}
+
 function setInsideTab(tab){
  const root=$("teamResults");if(!root)return;
  root.querySelectorAll("[data-inside-panel]").forEach(el=>{el.hidden=el.dataset.insidePanel!==tab});
@@ -1008,6 +1057,7 @@ function analyzeTeams(){
   $("teamResults").innerHTML=`
     ${gameInteriorNavigation(away,home)}
     <div data-inside-panel="matchup">${visualTeamSummary(away,home)}${fullTeamStatDashboard(away,home)}${matchupComparisonBoard(away,home)}</div>
+    <div data-inside-panel="leaders" hidden>${docTopPerformers(away,home)}</div>
     <div data-inside-panel="scoring" hidden>
     ${matchupScoringLab(away,home,awayProfile,homeProfile)}
     <div class="panel"><h3>Detailed 1Q / 1H / Full-Game Inputs</h3><div class="scroll"><table><thead><tr><th>Period</th><th>Away scored</th><th>Home scored</th><th>Away allowed</th><th>Home allowed</th><th>Away estimate</th><th>Home estimate</th><th>Combined</th></tr></thead><tbody>${comparisonRows}</tbody></table></div></div></div>
@@ -1088,6 +1138,7 @@ function analyzeTeams(){
     </div></div>`;
 
   renderMatchupPlayers();
+  docInitLeaders(away,home);
   nbaLoadMatchupStatistics(away,home);
   $("teamResults").querySelectorAll(".inside-tab").forEach(btn=>btn.addEventListener("click",()=>setInsideTab(btn.dataset.inside)));
   const playerJump=$("gamePlayersButton");
