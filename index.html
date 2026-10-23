@@ -795,9 +795,10 @@ const DOC_LEADER_CATEGORIES=[
  ["blocks","🛡️ Blocks","blocks"],["steals","⚡ Steals","steals"]
 ];
 function docLeaderValue(player,key,period="season"){
- const source=period==="season"?player.seasonAverages:
+ const source=period==="last20"?null:period==="season"?player.seasonAverages:
    period==="last5"?(player.last5?.complete?player.last5.averages:null):
    (player.last10?.complete?player.last10.averages:null);
+ if(period==="last20")return docRollingMetric(docRollingGames(player),key,NaN).average;
  const raw=source?.[key];
  return raw===null||raw===undefined||raw===""||!Number.isFinite(Number(raw))?null:Number(raw);
 }
@@ -812,7 +813,7 @@ function docLeaderTable(team,category,period){
 }
 function docRenderLeaders(away,home,period="season"){
  const el=document.getElementById("docLeadersBody");if(!el)return;
- const label=period==="season"?"Season average":period==="last5"?"Last 5 average":"Last 10 average";
+ const label=period==="season"?"Season average":period==="last5"?"Last 5 average":period==="last20"?"Last 20 average":"Last 10 average";
  el.innerHTML=DOC_LEADER_CATEGORIES.map(([key,title])=>
  '<div class="doc-leader-category"><h3>'+title+' <span class="small">· '+label+'</span></h3>'+
  '<div class="two"><div><h4>'+safe(away.team)+'</h4>'+docLeaderTable(away,key,period)+'</div>'+
@@ -823,7 +824,7 @@ function docTopPerformers(away,home){
  '<h2>🏆 Top Performers Intelligence</h2>'+
  '<p class="small">Verified historical 2025–26 player averages, grouped by last recorded team — NOT confirmed current rosters or 2026–27 projections. Players with missing stats are excluded. Click a player for their intelligence profile.</p>'+
  '<div class="actions"><label for="docLeaderPeriod">Stat window</label>'+
- '<select id="docLeaderPeriod" style="width:auto"><option value="season">Season</option><option value="last5">Last 5 (complete only)</option><option value="last10">Last 10 (complete only)</option></select></div>'+
+ '<select id="docLeaderPeriod" style="width:auto"><option value="season">Season</option><option value="last5">Last 5 (complete only)</option><option value="last10">Last 10 (complete only)</option><option value="last20">Last 20 (complete only)</option></select></div>'+
  '<div id="docLeadersBody"></div>'+
  '<p class="notice">Historical research only. Current-season games, verified injuries, defensive matchup, and live Kambi/Kalshi lines must be checked before evaluating a prop. No automatic betting qualification.</p></section>';
 }
@@ -1389,6 +1390,56 @@ function currentMatchupContext(player){
   };
 }
 
+
+/* Rolling 20-game consistency engine. Recomputes from loaded verified game logs. */
+const DOC_ROLLING_METRICS=[
+ ["points","Points"],["rebounds","Rebounds"],["assists","Assists"],
+ ["threes","3-Pointers Made"],["blocks","Blocks"],["steals","Steals"]
+];
+function docRollingGames(player){
+ const logs=Array.isArray(player.gameLogs)?player.gameLogs:[];
+ return logs.filter(g=>g&&g.date&&Number.isFinite(Date.parse(g.date)))
+   .slice().sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,20);
+}
+function docRollingMetric(games,key,line){
+ const values=games.map(g=>numberOrNull(g[key]));
+ const complete=games.length===20&&values.every(v=>v!==null);
+ const valid=values.filter(v=>v!==null);
+ const average=complete?valid.reduce((a,b)=>a+b,0)/20:null;
+ const hits=complete&&Number.isFinite(line)?valid.filter(v=>v>line).length:null;
+ return {complete,coverage:valid.length,average,hits,rate:hits===null?null:hits/20};
+}
+function docRollingTable(player){
+ const games=docRollingGames(player);
+ return '<section class="panel" id="docRollingPanel"><h3 class="gold">Rolling Last 20 · 80% Consistency</h3>'+
+ '<p class="small">The latest 20 dated game logs are used, newest first. An OVER clears only if 16 of 20 games exceed the entered prop line. This is a historical hit-rate screen, not a validated bet. Lines must be verified independently.</p>'+
+ '<p class="small">Available dated games: '+games.length+'/20. Recalculates whenever updated player logs are loaded.</p>'+
+ '<div class="scroll"><table><thead><tr><th>Stat</th><th>Last 20 Avg</th><th>OVER Line</th><th>Hits</th><th>Rate</th><th>Consistency</th></tr></thead><tbody>'+
+ DOC_ROLLING_METRICS.map(([key,label])=>{
+ const x=docRollingMetric(games,key,NaN);
+ return '<tr><td>'+safe(label)+'</td><td>'+num(x.average)+'</td>'+
+ '<td><input aria-label="'+safe(label)+' over line" type="number" min="0" step="0.5" data-doc-line="'+key+'" placeholder="Enter line" style="width:105px"></td>'+
+ '<td data-doc-hits="'+key+'">—</td><td data-doc-rate="'+key+'">—</td>'+
+ '<td data-doc-result="'+key+'">'+(x.complete?'ENTER LINE':'INSUFFICIENT DATA')+'</td></tr>';
+ }).join("")+'</tbody></table></div>'+
+ '<p class="small">Missing blocks, steals, or other game stats remain unavailable; no zero-filling. This is historical 2025–26 data until the feed is updated. Live sportsbook prices and injury checks are not connected.</p></section>';
+}
+function docBindRolling(player){
+ const panel=document.getElementById("docRollingPanel");if(!panel)return;
+ const games=docRollingGames(player);
+ panel.addEventListener("input",event=>{
+ const input=event.target.closest("[data-doc-line]");if(!input)return;
+ const key=input.dataset.docLine;
+ const line=input.value.trim()===""?NaN:Number(input.value);
+ const x=docRollingMetric(games,key,line);
+ panel.querySelector('[data-doc-hits="'+key+'"]').textContent=x.hits===null?'—':x.hits+'/20';
+ panel.querySelector('[data-doc-rate="'+key+'"]').textContent=x.rate===null?'—':(x.rate*100).toFixed(0)+'%';
+ const result=panel.querySelector('[data-doc-result="'+key+'"]');
+ result.textContent=!x.complete?'INSUFFICIENT DATA':!Number.isFinite(line)?'ENTER LINE':x.hits>=16?'80% CONSISTENT':'BELOW 80%';
+ result.className=x.hits!==null&&x.hits>=16?'green':'';
+ });
+}
+
 // PLAYER POPOUT
 
 function openPlayer(id){
@@ -1524,6 +1575,9 @@ function openPlayer(id){
     </div>
 
     <div class="sectionline"></div>
+    ${docRollingTable(player)}
+
+    <div class="sectionline"></div>
     <h3 class="gold">Recent Game Logs</h3>
     <div class="scroll">
       <table>
@@ -1549,6 +1603,7 @@ function openPlayer(id){
       </table>
     </div>`;
 
+  docBindRolling(player);
   $("modal").classList.add("open");
   document.body.style.overflow="hidden";
 }
