@@ -12,7 +12,7 @@ function attach(){
  if(body.querySelector("#nbaPropPanel"))return;
  const panel=document.createElement("section");panel.id="nbaPropPanel";panel.className="panel";panel.style.marginTop="20px";
  const h=document.createElement("h3");h.textContent="NBA Player Props — Verified Game Logs";panel.append(h);
- const explain=document.createElement("p");explain.className="small";explain.textContent="Historical 2025–26 regular-season player results. Enter a real current sportsbook line and price; no sportsbook odds or 2026–27 stats are invented.";panel.append(explain);
+ const explain=document.createElement("p");explain.className="small";explain.textContent="Historical 2025–26 player logs. Last-20 consistency requires at least 16 hits in 20 games (80%). Enter a verified line and price; current-season data and odds are not invented.";panel.append(explain);
  const grid=document.createElement("div");grid.className="grid";panel.append(grid);
  function field(label,tag){const wrap=document.createElement("label");wrap.textContent=label;wrap.style.display="block";const el=document.createElement(tag);el.style.marginTop="6px";wrap.append(el);grid.append(wrap);return el;}
  const market=field("Player prop","select");for(const [label,key] of MARKETS){const o=new Option(label,key);market.add(o);}
@@ -28,13 +28,23 @@ function attach(){
  const games=(Array.isArray(player.gameLogs)?player.gameLogs:[]).slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
  const k=market.value,t=num(line.value),priceData=priceInfo();
  const valid=games.map(g=>({g,v:value(g,k)})).filter(x=>x.v!==null);
- const recent=valid.slice(0,10);
+ const recent=valid.slice(0,20);
  const hits=xs=>t===null?null:xs.filter(x=>side.value==="OVER"?x.v>t:x.v<t).length;
  const rate=xs=>xs.length&&t!==null?hits(xs)/xs.length:null;
- const r5=rate(valid.slice(0,5)),r10=rate(recent),rAll=rate(valid);
- const historicalQualified=valid.length>=3&&t!==null&&rAll>=.65;
+ const complete=recent.length===20;
+ const r20=complete?rate(recent):null;
+ const rAll=rate(valid);
+ const historicalQualified=complete&&t!==null&&hits(recent)>=16;
  const oddsValid=!!priceData;
- const lines=["Data: 2025–26 regular season (historical, not current-season)","Recorded games: "+valid.length,"Last 5: "+(r5===null?"enter line":hits(valid.slice(0,5))+"/"+Math.min(5,valid.length)+" ("+percent(r5)+")"),"Last 10: "+(r10===null?"enter line":hits(recent)+"/"+recent.length+" ("+percent(r10)+")"),"Season hit rate: "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),"Sportsbook break-even: "+(oddsValid?percent(priceData.probability):"enter verified price"),"Trend screen (65% minimum): "+(t===null?"AWAITING LINE":historicalQualified?"MEETS HISTORICAL TREND":"BELOW THRESHOLD"),"Bet qualification: REVIEW — 2026–27 form, opponent matchup and calibrated pricing model not verified."];
+ const lines=[
+ "Data: 2025–26 regular season (historical, not current-season)",
+ "Recorded games: "+valid.length,
+ "Last 20: "+(!complete?"INSUFFICIENT DATA ("+recent.length+"/20 verified)":r20===null?"enter line":hits(recent)+"/20 ("+percent(r20)+")"),
+ "Season hit rate (reference): "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),
+ "Sportsbook break-even: "+(oddsValid?percent(priceData.probability):"enter verified price"),
+ "Consistency screen (80% · 16/20): "+(!complete?"INSUFFICIENT DATA":t===null?"AWAITING LINE":historicalQualified?"MEETS 80% CONSISTENCY":"BELOW 80% — PASS"),
+ "Bet qualification: REVIEW — historical consistency is not a validated betting edge; current form, opponent and price must be verified."
+ ];
  result.textContent=lines.join("\n");
  table.replaceChildren();
  const head=document.createElement("tr");table.append(head);
