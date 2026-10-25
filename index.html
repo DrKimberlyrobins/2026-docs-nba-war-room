@@ -1440,6 +1440,51 @@ function docBindRolling(player){
  });
 }
 
+
+/* Attempts Intelligence — shown for every player; missing data is never zero-filled. */
+const DOC_ATTEMPTS=[
+ ["fieldGoalsMade","fieldGoalsAttempted","Field goals (FGM/FGA)"],
+ ["threePointersMade","threePointersAttempted","Three-pointers (3PM/3PA)"],
+ ["freeThrowsMade","freeThrowsAttempted","Free throws (FTM/FTA)"]
+];
+function docAttemptValue(g,aliases){
+ for(const k of aliases){const v=numberOrNull(g?.[k]);if(v!==null)return v;}
+ return null;
+}
+const DOC_ATTEMPT_KEYS={
+ fieldGoalsMade:["fieldGoalsMade","fgm","field_goals_made"],
+ fieldGoalsAttempted:["fieldGoalsAttempted","fga","field_goals_attempted"],
+ threePointersMade:["threePointersMade","threePointFieldGoalsMade","threes","fg3m"],
+ threePointersAttempted:["threePointersAttempted","threePointFieldGoalsAttempted","fg3a","threePointAttempts"],
+ freeThrowsMade:["freeThrowsMade","ftm"],
+ freeThrowsAttempted:["freeThrowsAttempted","fta"]
+};
+function docAttemptSummary(logs,key){
+ const vals=logs.map(g=>docAttemptValue(g,DOC_ATTEMPT_KEYS[key]));
+ const good=vals.filter(v=>v!==null);
+ return {mean:good.length?good.reduce((a,b)=>a+b,0)/good.length:null,coverage:good.length,total:logs.length,
+  min:good.length?Math.min(...good):null,max:good.length?Math.max(...good):null};
+}
+function docAttemptsPanel(player){
+ const games=docRollingGames(player), windows=[games.slice(0,1),games.slice(0,5),games.slice(0,10),games];
+ const cell=(g,m,a)=>{
+  const made=docAttemptSummary(g,m),attempt=docAttemptSummary(g,a);
+  return '<strong>'+num(made.mean)+' / '+num(attempt.mean)+'</strong><br><small>'+
+   made.coverage+'/'+g.length+' made · '+attempt.coverage+'/'+g.length+' attempts verified</small>';
+ };
+ const rows=DOC_ATTEMPTS.map(([m,a,label])=>
+  '<tr><td>'+safe(label)+'</td>'+windows.map(g=>'<td>'+cell(g,m,a)+'</td>').join('')+'</tr>').join('');
+ const recent=games.slice(0,20);
+ return '<section class="panel" id="docAttemptsIntelligence"><h3 class="gold">🎯 Shooting Attempts Intelligence · All Players</h3>'+
+ '<p class="small">Actual made / attempted per game. Windows use dated historical logs, newest first. Averages use only games with the specified stat available; coverage is shown for each. No invented attempts or zero-filling. These are NOT live 2026–27 statistics.</p>'+
+ '<div class="scroll"><table><thead><tr><th>Metric</th><th>Last game</th><th>Last 5</th><th>Last 10</th><th>Last 20</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+ '<h4 class="gold">Attempt Volume · Last 20</h4>'+
+ '<div class="scroll"><table><thead><tr><th>Attempt Type</th><th>Average</th><th>Low–High</th><th>Games With Data</th></tr></thead><tbody>'+
+ DOC_ATTEMPTS.map(([,a,label])=>{const v=docAttemptSummary(recent,a);return '<tr><td>'+safe(label)+'</td><td>'+num(v.mean)+'</td><td>'+num(v.min,0)+'–'+num(v.max,0)+'</td><td>'+v.coverage+'/'+recent.length+'</td></tr>';}).join('')+
+ '</tbody></table></div>'+
+ '<p class="small">Rebound chances, potential assists, and defensive opportunities require verified tracking data and are not inferred from box-score totals. Prop qualification remains separate from volume.</p></section>';
+}
+
 // PLAYER POPOUT
 
 function openPlayer(id){
@@ -1529,6 +1574,8 @@ function openPlayer(id){
       ${statCard("Season Minutes",num(season.minutes))}
     </div>
 
+    <div class="sectionline"></div>
+    ${docAttemptsPanel(player)}
     <div class="sectionline"></div>
     <h3 class="gold">Player Statistical Comparison</h3>
     <div class="scroll">
