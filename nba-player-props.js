@@ -12,7 +12,7 @@ function attach(){
  if(body.querySelector("#nbaPropPanel"))return;
  const panel=document.createElement("section");panel.id="nbaPropPanel";panel.className="panel";panel.style.marginTop="20px";
  const h=document.createElement("h3");h.textContent="NBA Player Props — Verified Game Logs";panel.append(h);
- const explain=document.createElement("p");explain.className="small";explain.textContent="Historical 2025–26 player logs. Last-20 consistency requires at least 16 hits in 20 games (80%). Enter a verified line and price; current-season data and odds are not invented.";panel.append(explain);
+ const explain=document.createElement("p");explain.className="small";explain.textContent="Historical 2025–26 player logs. Last-20 consistency: 14/20 (70%) qualifies; 16/20 (80%) is strong. Enter a verified line and price; current-season data and odds are not invented.";panel.append(explain);
  const grid=document.createElement("div");grid.className="grid";panel.append(grid);
  function field(label,tag){const wrap=document.createElement("label");wrap.textContent=label;wrap.style.display="block";const el=document.createElement(tag);el.style.marginTop="6px";wrap.append(el);grid.append(wrap);return el;}
  const market=field("Player prop","select");for(const [label,key] of MARKETS){const o=new Option(label,key);market.add(o);}
@@ -34,7 +34,9 @@ function attach(){
  const complete=recent.length===20;
  const r20=complete?rate(recent):null;
  const rAll=rate(valid);
- const historicalQualified=complete&&t!==null&&hits(recent)>=16;
+ const recentHits=complete&&t!==null?hits(recent):null;
+ const historicalQualified=recentHits!==null&&recentHits>=14;
+ const strongConsistency=recentHits!==null&&recentHits>=16;
  const oddsValid=!!priceData;
  const lines=[
  "Data: 2025–26 regular season (historical, not current-season)",
@@ -42,7 +44,7 @@ function attach(){
  "Last 20: "+(!complete?"INSUFFICIENT DATA ("+recent.length+"/20 verified)":r20===null?"enter line":hits(recent)+"/20 ("+percent(r20)+")"),
  "Season hit rate (reference): "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),
  "Sportsbook break-even: "+(oddsValid?percent(priceData.probability):"enter verified price"),
- "Consistency screen (80% · 16/20): "+(!complete?"INSUFFICIENT DATA":t===null?"AWAITING LINE":historicalQualified?"MEETS 80% CONSISTENCY":"BELOW 80% — PASS"),
+ "Consistency screen (70% · 14/20 minimum): "+(!complete?"INSUFFICIENT DATA":t===null?"AWAITING LINE":strongConsistency?"STRONG — 80%+ (16/20+)":historicalQualified?"QUALIFIED — 70%+ (14/20+)":recentHits===13?"WATCH — 65% (13/20)":"PASS — BELOW 70%"),
  "Bet qualification: REVIEW — historical consistency is not a validated betting edge; current form, opponent and price must be verified."
  ];
  result.textContent=lines.join("\n");
