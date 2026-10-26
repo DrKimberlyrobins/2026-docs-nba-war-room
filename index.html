@@ -1489,38 +1489,47 @@ function docAttemptsPanel(player){
 /* ESPN historical game-log enrichment. Loaded on demand for every player. */
 const docAttemptCache=new Map();
 function docEspnRows(payload){
- const labels=payload?.labels||payload?.names||[];
- const names=payload?.names||labels;
- const eventDetails=payload?.events||{};
- const raw=Array.isArray(eventDetails)?eventDetails:Object.entries(eventDetails).map(([id,e])=>({...e,id:e.id||id}));
+ const events=payload?.events||{};
+ const eventMap=new Map();
+ for(const [key,e] of Object.entries(events)){
+  if(e&&typeof e==="object")eventMap.set(String(e.id||key),e);
+ }
  const rows=[];
- const parsePair=v=>{const m=String(v??"").trim().match(/^(\\d+)\\s*[-–]\\s*(\\d+)$/);return m?[Number(m[1]),Number(m[2])]:null;};
- function walk(node,depth=0){
-  if(!node||depth>9)return;
-  if(Array.isArray(node)){for(const v of node)walk(v,depth+1);return;}
+ const parsePair=value=>{
+  const match=String(value??"").trim().match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  return match?[Number(match[1]),Number(match[2])]:null;
+ };
+ function scan(node,labels=[],depth=0){
+  if(!node||depth>12)return;
+  if(Array.isArray(node)){node.forEach(item=>scan(item,labels,depth+1));return;}
   if(typeof node!=="object")return;
-  const values=Array.isArray(node.stats)?node.stats:Array.isArray(node.statistics)?node.statistics:null;
-  if(values){
-   const date=node.date||node.gameDate||eventDetails[node.eventId]?.date||eventDetails[node.id]?.date;
-   const dateStr=typeof date==="string"?date:(date?.date||"");
-   const map={};values.forEach((v,i)=>{map[String(names[i]||labels[i]||"").toLowerCase()]=v;map[String(labels[i]||"").toLowerCase()]=v;});
-   const pick=(...keys)=>keys.map(k=>map[k.toLowerCase()]).find(v=>v!==undefined);
-   const fg=parsePair(pick("FG","fieldGoalsMade","fieldGoalsMade-fieldGoalsAttempted"));
-   const tp=parsePair(pick("3PT","3P","threePointFieldGoalsMade","threePointersMade"));
-   const ft=parsePair(pick("FT","freeThrowsMade","freeThrowsMade-freeThrowsAttempted"));
-   if(dateStr&&Number.isFinite(Date.parse(dateStr))&&(fg||tp||ft)){
-    rows.push({date:dateStr,fieldGoalsMade:fg?.[0]??null,fieldGoalsAttempted:fg?.[1]??null,
+  const names=Array.isArray(node.names)?node.names:Array.isArray(node.labels)?node.labels:labels;
+  const stats=Array.isArray(node.stats)?node.stats:Array.isArray(node.statistics)?node.statistics:null;
+  if(stats&&stats.length&&stats.every(x=>typeof x!=="object"||x===null)){
+   const eventId=String(node.eventId||node.event?.id||node.id||"");
+   const event=eventMap.get(eventId)||{};
+   const date=node.date||node.gameDate||event.date||event.gameDate||event.startDate;
+   const dateString=typeof date==="string"?date:(date?.date||date?.displayValue||"");
+   const fields={};
+   stats.forEach((v,i)=>{fields[String(names[i]||"").toLowerCase().replace(/[^a-z0-9]/g,"")]=v;});
+   const lookup=(...keys)=>keys.map(k=>fields[k.toLowerCase().replace(/[^a-z0-9]/g,"")]).find(v=>v!==undefined);
+   const fg=parsePair(lookup("FG","fieldGoals","fieldGoalsMade-fieldGoalsAttempted")??stats[1]);
+   const tp=parsePair(lookup("3PT","3P","threePointFieldGoals","threePointers")??stats[3]);
+   const ft=parsePair(lookup("FT","freeThrows")??stats[5]);
+   if(dateString&&Number.isFinite(Date.parse(dateString))&&(fg||tp||ft)){
+    rows.push({date:dateString,fieldGoalsMade:fg?.[0]??null,fieldGoalsAttempted:fg?.[1]??null,
      threePointersMade:tp?.[0]??null,threePointersAttempted:tp?.[1]??null,
      freeThrowsMade:ft?.[0]??null,freeThrowsAttempted:ft?.[1]??null});
    }
   }
   for(const [key,val] of Object.entries(node)){
-   if(["stats","statistics","labels","names","glossary"].includes(key))continue;
-   if(val&&typeof val==="object")walk(val,depth+1);
+   if(["stats","statistics","labels","names","glossary","events"].includes(key))continue;
+   if(val&&typeof val==="object")scan(val,names,depth+1);
   }
  }
- walk(payload?.seasonTypes||payload?.categories||payload?.gameLog||payload);
- const unique=new Map();for(const row of rows){const key=row.date.slice(0,10);if(!unique.has(key))unique.set(key,row);}
+ scan(payload);
+ const unique=new Map();
+ for(const row of rows){const key=row.date.slice(0,10);if(!unique.has(key))unique.set(key,row);}
  return [...unique.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
 }
 async function docLoadAttempts(player){
