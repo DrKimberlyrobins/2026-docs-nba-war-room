@@ -43,7 +43,7 @@ NBAView.refreshCurrent=async function(){
  if(NBAView.mode!=='current'||!NBAView.prepared||NBAView.refreshing)return;
  NBAView.refreshing=true;
  try{
-  const response=await fetch('./data/nba-current.json',{cache:'no-store'});if(!response.ok)return;
+  const response=await fetch('./data/nba-current.json',{cache:'no-cache'});if(!response.ok)return;
   const snapshot=await response.json();
   if(snapshot.generatedAt===NBAView.current?.generatedAt||!Array.isArray(snapshot.players)||!Array.isArray(snapshot.teams))return;
   const away=document.getElementById('awayTeam').value,home=document.getElementById('homeTeam').value;

@@ -8,14 +8,15 @@ const w=dom.window,delay=()=>new Promise(r=>setTimeout(r,25));
 (async()=>{for(let i=0;i<200&&!w.document.querySelector('#nbaImpactProjection');i++)await delay();
 assert.equal(w.eval('status.season'),'2026-27');assert.equal(w.eval('teams.length'),30);assert(w.document.querySelector('#nbaImpactProjection').textContent.includes('Player Impact'));
 assert.equal(w.document.querySelectorAll('#awayTeam option').length,30);
-w.eval("openPlayer(players.find(p=>p.name==='Bam Adebayo').playerId)");await delay();await delay();
+// Fixed three-game fixture in memory: the test must keep passing as the real season grows.
+w.eval("var smokePlayer=players.find(p=>p.name==='Bam Adebayo'); smokePlayer.gameLogs=smokePlayer.gameLogs.slice(0,3).map((g,i)=>({...g,points:[20,4,15][i]})); openPlayer(smokePlayer.playerId)");await delay();await delay();
 assert(w.document.querySelector('#docRealPlayerVolume'));assert(!w.document.querySelector('#docRealPlayerVolume').textContent.includes('Last 20'));assert(w.document.querySelector('#docRealPlayerVolume').textContent.includes('(3/3)')); assert(w.document.querySelector('#nbaPropPanel'));assert(w.document.querySelector('#saveVerifiedProp'));assert(!w.document.querySelector('#docRollingPanel'));
 const controls=w.document.querySelectorAll('#nbaPropPanel input,#nbaPropPanel select');
 controls[1].value='10.5';controls[3].value='-110';controls[5].value='Kambi';controls[1].dispatchEvent(new w.Event('input'));
 assert.equal(w.document.querySelector('#nbaPropPanel').consistency.tier,'WATCH');
 replacementSnapshot=JSON.parse(fs.readFileSync(path.join(root,'data/nba-current.json'),'utf8'));
 replacementSnapshot.generatedAt='2099-10-26T12:00:00Z';
-const updated=replacementSnapshot.players.find(p=>p.name==='Bam Adebayo');
+const updated=replacementSnapshot.players.find(p=>p.name==='Bam Adebayo');updated.gameLogs=JSON.parse(w.eval('JSON.stringify(smokePlayer.gameLogs)'));
 updated.gameLogs.push({...updated.gameLogs[0],eventId:'test-new-final',date:'2026-10-26T04:00:00Z',points:20});updated.gamesPlayed++;
 await w.eval('NBAView.refreshCurrent()');await delay();await delay();
 assert.equal(w.document.querySelector('#nbaPropPanel').consistency.season.games,4);
