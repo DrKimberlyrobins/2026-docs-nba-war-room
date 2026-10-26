@@ -55,6 +55,7 @@
   const gameRows=games.slice(0,20).map(g=>"<tr>"+[localDate(g),...keys.map(([key,,aliases])=>fmt(get(g,aliases),key))].map(v=>"<td>"+v+"</td>").join("")+"</tr>").join("");
   el.innerHTML='<h3 class="gold">Player Volume · Minutes, Usage & Actuals</h3><p class="small">Verified recorded games only. Season / last 5 / last 10. Each cell shows the number of games with that statistic. — means unavailable, not zero. No free throws or estimated values. Shooting efficiency calculated from verified makes and attempts.</p><div class="scroll"><table><thead><tr><th>Metric</th><th>Season</th><th>Last 5</th><th>Last 10</th></tr></thead><tbody>'+rows+'</tbody></table></div><h4>Actual game-by-game results</h4><div class="scroll"><table><thead><tr><th>Date</th>'+keys.map(k=>'<th>'+k[1]+'</th>').join('')+'</tr></thead><tbody>'+gameRows+'</tbody></table></div><p class="small">Source: existing verified player game logs; ESPN historical shooting splits when available. Usage and tracking fields appear only when supplied by verified records. Current mode uses the reconciled snapshot; historical mode requests 2025–26 only. Missing fields are not estimated; no win probability is inferred from this table.</p>';
  }
+ document.addEventListener("nba:data-updated",draw);
  const modal=document.getElementById("modal");
  if(modal)new MutationObserver(()=>setTimeout(draw,0)).observe(modal,{attributes:true,attributeFilter:["class"]});
  document.addEventListener("click",e=>{if(e.target.closest?.("[data-player]"))setTimeout(draw,150);});

@@ -37,3 +37,32 @@ function nbaPlayerImpact(player){
  const root=document.getElementById('modalContent'),x=NBAImpact.impact(player),fmt=v=>v===null?'—':v.toFixed(1);
  const panel=document.createElement('section');panel.className='panel';panel.innerHTML='<h3>Player Impact Evidence</h3><div class="grid">'+statCard('Availability',safe(x.availability),safe(player.availability?.reportedAt||'Not listed is not lineup confirmation'))+statCard('Scoring per minute',x.pointsPerMinute===null?'—':x.pointsPerMinute.toFixed(3),x.games+' games with minutes')+statCard('eFG%',fmt(x.effectiveFgPct),x.efficiencyGames+' paired shooting games; ratio of totals')+statCard('Usage %',fmt(x.usagePct),'Unavailable unless reported by source')+statCard('Defensive activity /36',fmt(x.defensiveEventsPer36),'Steals + blocks + defensive rebounds')+statCard('On-court net /36',fmt(x.netPointsPer36),'Plus/minus; includes lineup effects')+'</div><p class="small">Current roster and minutes feed the matchup scenario above. Defensive activity and net are descriptive, not isolated individual defensive value.</p>';root.prepend(panel);
 }
+
+// Check the committed snapshot while the page is open; preserve matchup and prop inputs.
+NBAView.refreshCurrent=async function(){
+ if(NBAView.mode!=='current'||!NBAView.prepared||NBAView.refreshing)return;
+ NBAView.refreshing=true;
+ try{
+  const response=await fetch('./data/nba-current.json',{cache:'no-store'});if(!response.ok)return;
+  const snapshot=await response.json();
+  if(snapshot.generatedAt===NBAView.current?.generatedAt||!Array.isArray(snapshot.players)||!Array.isArray(snapshot.teams))return;
+  const away=document.getElementById('awayTeam').value,home=document.getElementById('homeTeam').value;
+  const playerId=document.getElementById('modal')?.classList.contains('open')?selectedPlayerId:null;
+  const inputs=[...document.querySelectorAll('#nbaPropPanel input,#nbaPropPanel select')].map(el=>el.value);
+  NBAView.current=snapshot;await loadEngine();
+  document.getElementById('awayTeam').value=away;document.getElementById('homeTeam').value=home;analyzeTeams();
+  if(playerId&&playerById.has(String(playerId))){
+   openPlayer(playerId);document.dispatchEvent(new CustomEvent('nba:data-updated'));
+   setTimeout(()=>{
+    const controls=document.querySelectorAll('#nbaPropPanel input,#nbaPropPanel select');
+    controls.forEach((el,i)=>{if(inputs[i]!==undefined)el.value=inputs[i];});
+    const panel=document.getElementById('nbaPropPanel');
+    if(controls[2])panel.dataset.priceFormat=controls[2].value;
+    panel?.recalculateConsistency?.();
+   },0);
+  }
+ }catch(error){console.warn('Current snapshot refresh deferred: '+error.message);}
+ finally{NBAView.refreshing=false;}
+};
+setInterval(()=>{if(document.visibilityState!=='hidden')NBAView.refreshCurrent();},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')NBAView.refreshCurrent();});

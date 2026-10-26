@@ -1,7 +1,7 @@
 """ESPN regular-season ingestion. Never overwrites the historical baseline.
 Rejects incomplete games, mismatched scores, duplicate rows and wrong seasons.
 """
-import json, math, os, urllib.request, time
+import json, math, os, urllib.request, time, hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -18,6 +18,22 @@ def fetch(path):
         except Exception:
             if attempt==2:raise
             time.sleep(attempt+1)
+def cached_fetch(path):
+    # Reuse older schedules and recently verified final summaries between refreshes.
+    cache=ROOT/'.nba-cache'/str(YEAR)/hashlib.sha256(path.encode()).hexdigest()
+    old_board=path.startswith('scoreboard?dates=') and path.split('=')[-1]<(NOW-timedelta(days=2)).strftime('%Y%m%d')
+    summary=path.startswith('summary?event=')
+    if (old_board or summary) and cache.exists():
+        try:
+            data=json.loads(cache.read_text())
+            if old_board or time.time()-cache.stat().st_mtime<21600:return data
+        except (ValueError,OSError):pass
+    data=fetch(path)
+    final=summary and data.get('header',{}).get('competitions',[{}])[0].get('status',{}).get('type',{}).get('completed')
+    if old_board or final:
+        cache.parent.mkdir(parents=True,exist_ok=True);cache.write_text(json.dumps(data,separators=(',',':')))
+    return data
+
 def number(v):
     try:
         if ':' in str(v):
@@ -68,7 +84,7 @@ def parse_game(d):
 def main():
     errors=[]
     def attempt(path):
-        try:return fetch(path)
+        try:return cached_fetch(path)
         except Exception as e:errors.append({'url':BASE+path,'error':str(e)});return None
     historical=json.loads((ROOT/'data/nba-teams-2026.json').read_text())['teams']
     start=datetime(YEAR-1,10,1);days=(NOW.replace(tzinfo=None)-start).days+1
