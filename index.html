@@ -38,6 +38,10 @@ input:focus,select:focus{outline:2px solid var(--gold)}
 .notice{border-left:3px solid var(--gold);background:#1d2b3b;padding:13px;border-radius:6px;color:#e5edf7}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .scroll{overflow-x:auto}
+.nba-impact-scroll{max-height:clamp(240px,65vh,620px);overflow:auto;position:relative;scrollbar-gutter:stable}
+.nba-impact-scroll table{border-collapse:separate;border-spacing:0}
+.nba-impact-scroll thead th{position:sticky;top:0;z-index:2;background:#172943;box-shadow:0 1px 0 var(--line)}
+.nba-impact-scroll:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 table{width:100%;border-collapse:collapse;min-width:570px}
 th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--gold);background:#172943}
@@ -346,7 +350,7 @@ footer{padding:25px;text-align:center;color:var(--muted)}
 
 <script src="./nba-consistency.js?v=20261026-adaptive2"></script>
 <script src="./nba-impact-engine.js?v=20261026-adaptive2"></script>
-<script src="./nba-impact-ui.js?v=20261026-adaptive2"></script>
+<script src="./nba-impact-ui.js?v=20261026-stickyheaders1"></script>
 <script>
 "use strict";
 
