@@ -8,7 +8,7 @@ const w=dom.window,delay=()=>new Promise(r=>setTimeout(r,25));
 (async()=>{for(let i=0;i<200&&!w.document.querySelector('#nbaImpactProjection');i++)await delay();
 assert.equal(w.eval('status.season'),'2026-27');assert.equal(w.eval('teams.length'),30);assert(w.document.querySelector('#nbaImpactProjection').textContent.includes('Player Impact'));
 assert.equal(w.document.querySelectorAll('#awayTeam option').length,30);
-w.eval("openPlayer(players.find(p=>p.gamesPlayed>2).playerId)");await delay();await delay();
+w.eval("openPlayer(players.find(p=>p.name==='Bam Adebayo').playerId)");await delay();await delay();
 assert(w.document.querySelector('#docRealPlayerVolume'));assert(!w.document.querySelector('#docRealPlayerVolume').textContent.includes('Last 20'));assert(w.document.querySelector('#docRealPlayerVolume').textContent.includes('(3/3)')); assert(w.document.querySelector('#nbaPropPanel'));assert(w.document.querySelector('#saveVerifiedProp'));assert(!w.document.querySelector('#docRollingPanel'));
 const controls=w.document.querySelectorAll('#nbaPropPanel input,#nbaPropPanel select');
 controls[1].value='10.5';controls[3].value='-110';controls[5].value='Kambi';controls[1].dispatchEvent(new w.Event('input'));

@@ -32,8 +32,13 @@
  }
  function render(el,player,history,attempts){
   const map=new Map();
-  for(const g of history){if(g?.date)map.set(String(g.date).slice(0,10),{...g});}
-  for(const g of attempts){const d=String(g.date||"").slice(0,10);if(d)map.set(d,{...(map.get(d)||{}),...g});}
+  const localDate=g=>{const d=new Date(g.date);return Number.isFinite(d.getTime())?new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago'}).format(d):'';};
+  for(const g of history){if(g?.date)map.set(String(g.eventId||g.date),{...g});}
+  for(const g of attempts){
+   const candidates=[...map.entries()].filter(([,row])=>localDate(row)===localDate(g));
+   const key=g.eventId?String(g.eventId):candidates.length===1?candidates[0][0]:candidates.length===0?String(g.date):null;
+   if(key)map.set(key,{...(map.get(key)||{}),...g});
+  }
   for(const g of map.values()){const fga=get(g,["fieldGoalsAttempted","fga"]),fgm=get(g,["fieldGoalsMade","fgm"]),tpa=get(g,["threePointersAttempted","threePointAttempts","3pa"]),tpm=get(g,["threePointersMade","threes","3pm"]);if(fga>0&&fgm!==null){g.fgPct=100*fgm/fga;if(tpa!==null&&tpm!==null)g.effectiveFgPct=100*(fgm+0.5*tpm)/fga;}if(tpa>0&&tpm!==null)g.threePct=100*tpm/tpa;}
   const games=[...map.values()].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
   const windows=[games,games.slice(0,5),games.slice(0,10)];
@@ -47,8 +52,8 @@
    return fmt(mean,k)+" <small>("+values.length+"/"+arr.length+")</small>";
   };
   const rows=keys.map(([key,label,aliases])=>"<tr><td>"+label+"</td>"+windows.map(w=>"<td>"+summary(w,aliases,key)+"</td>").join("")+"</tr>").join("");
-  const gameRows=games.slice(0,20).map(g=>"<tr>"+[String(g.date||"").slice(0,10),...keys.map(([key,,aliases])=>fmt(get(g,aliases),key))].map(v=>"<td>"+v+"</td>").join("")+"</tr>").join("");
-  el.innerHTML='<h3 class="gold">Player Volume · Minutes, Usage & Actuals</h3><p class="small">Verified historical games only. Season / last 5 / last 10. Each cell shows the number of games with that statistic. — means unavailable, not zero. No free throws or estimated values. Shooting efficiency calculated from verified makes and attempts.</p><div class="scroll"><table><thead><tr><th>Metric</th><th>Season</th><th>Last 5</th><th>Last 10</th></tr></thead><tbody>'+rows+'</tbody></table></div><h4>Actual game-by-game results</h4><div class="scroll"><table><thead><tr><th>Date</th>'+keys.map(k=>'<th>'+k[1]+'</th>').join('')+'</tr></thead><tbody>'+gameRows+'</tbody></table></div><p class="small">Source: existing verified player game logs; ESPN historical shooting splits when available. Usage and tracking fields appear only when supplied by verified records. Current mode uses the reconciled snapshot; historical mode requests 2025–26 only. Missing fields are not estimated; no win probability is inferred from this table.</p>';
+  const gameRows=games.slice(0,20).map(g=>"<tr>"+[localDate(g),...keys.map(([key,,aliases])=>fmt(get(g,aliases),key))].map(v=>"<td>"+v+"</td>").join("")+"</tr>").join("");
+  el.innerHTML='<h3 class="gold">Player Volume · Minutes, Usage & Actuals</h3><p class="small">Verified recorded games only. Season / last 5 / last 10. Each cell shows the number of games with that statistic. — means unavailable, not zero. No free throws or estimated values. Shooting efficiency calculated from verified makes and attempts.</p><div class="scroll"><table><thead><tr><th>Metric</th><th>Season</th><th>Last 5</th><th>Last 10</th></tr></thead><tbody>'+rows+'</tbody></table></div><h4>Actual game-by-game results</h4><div class="scroll"><table><thead><tr><th>Date</th>'+keys.map(k=>'<th>'+k[1]+'</th>').join('')+'</tr></thead><tbody>'+gameRows+'</tbody></table></div><p class="small">Source: existing verified player game logs; ESPN historical shooting splits when available. Usage and tracking fields appear only when supplied by verified records. Current mode uses the reconciled snapshot; historical mode requests 2025–26 only. Missing fields are not estimated; no win probability is inferred from this table.</p>';
  }
  const modal=document.getElementById("modal");
  if(modal)new MutationObserver(()=>setTimeout(draw,0)).observe(modal,{attributes:true,attributeFilter:["class"]});
