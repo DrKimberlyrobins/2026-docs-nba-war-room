@@ -35,14 +35,23 @@ function connectUsage(players){
  return players;
 }
 function per36(gs,key){const valid=gs.filter(g=>n(g[key])!==null&&n(g.minutes)>0);return valid.length?36*sum(valid,key)/sum(valid,'minutes'):null;}
+function freeThrowsSummary(logs){
+ const gs=logs||[],valid=v=>n(v)!==null&&n(v)>=0;
+ const attempted=gs.filter(g=>valid(g.freeThrowsAttempted));
+ const made=gs.filter(g=>valid(g.freeThrowsMade));
+ const paired=gs.filter(g=>valid(g.freeThrowsAttempted)&&valid(g.freeThrowsMade)&&g.freeThrowsMade<=g.freeThrowsAttempted);
+ const scoring=paired.filter(g=>valid(g.points)&&g.freeThrowsMade<=g.points);
+ const attempts=sum(paired,'freeThrowsAttempted'),points=sum(scoring,'points');
+ return {attempts:mean(attempted.map(g=>g.freeThrowsAttempted)),made:mean(made.map(g=>g.freeThrowsMade)),percentage:attempts?100*sum(paired,'freeThrowsMade')/attempts:null,pointShare:points?100*sum(scoring,'freeThrowsMade')/points:null,attemptedGames:attempted.length,madeGames:made.length,percentageGames:paired.length,pointShareGames:scoring.length};
+}
 function impact(player){
  const gs=(player.gameLogs||[]).filter(g=>n(g.minutes)>0),minutes=sum(gs,'minutes');
  const paired=gs.filter(g=>n(g.fieldGoalsMade)!==null&&n(g.fieldGoalsAttempted)!==null&&n(g.threes)!==null);
  const fga=sum(paired,'fieldGoalsAttempted'),fgm=sum(paired,'fieldGoalsMade'),tpm=sum(paired,'threes');
  const three=gs.filter(g=>n(g.threePointersAttempted)!==null&&n(g.threes)!==null),tpa=sum(three,'threePointersAttempted');
  const defensive=gs.filter(g=>n(g.steals)!==null&&n(g.blocks)!==null&&n(g.defensiveRebounds)!==null);
- const usage=gs.filter(g=>n(g.usagePercentage)!==null),estimated=usageSummary(gs);
- return {games:gs.length,minutes:mean(gs.map(g=>g.minutes)),points:mean(gs.map(g=>g.points)),pointsPerMinute:minutes?sum(gs,'points')/minutes:null,fieldGoalsAttempted:mean(paired.map(g=>g.fieldGoalsAttempted)),fgPct:fga?100*fgm/fga:null,effectiveFgPct:fga?100*(fgm+.5*tpm)/fga:null,threePct:tpa?100*sum(three,'threes')/tpa:null,usagePct:mean(usage.map(g=>g.usagePercentage)),estimatedUsagePct:estimated.percentage,usageGames:estimated.games,assistsPer36:per36(gs,'assists'),reboundsPer36:per36(gs,'rebounds'),turnoversPer36:per36(gs,'turnovers'),shotAttemptsPer36:paired.length&&sum(paired,'minutes')?36*fga/sum(paired,'minutes'):null,defensiveEventsPer36:defensive.length&&sum(defensive,'minutes')?36*(sum(defensive,'steals')+sum(defensive,'blocks')+sum(defensive,'defensiveRebounds'))/sum(defensive,'minutes'):null,netPointsPer36:gs.some(g=>n(g.plusMinus)!==null)?36*sum(gs.filter(g=>n(g.plusMinus)!==null),'plusMinus')/sum(gs.filter(g=>n(g.plusMinus)!==null),'minutes'):null,availability:player.availability?.status||'Unknown',efficiencyGames:paired.length};
+ const usage=gs.filter(g=>n(g.usagePercentage)!==null),estimated=usageSummary(gs),ft=freeThrowsSummary(player.gameLogs);
+ return {freeThrowsAttempted:ft.attempts,freeThrowsMade:ft.made,freeThrowPct:ft.percentage,freeThrowPointShare:ft.pointShare,freeThrowGames:ft.attemptedGames,games:gs.length,minutes:mean(gs.map(g=>g.minutes)),points:mean(gs.map(g=>g.points)),pointsPerMinute:minutes?sum(gs,'points')/minutes:null,fieldGoalsAttempted:mean(paired.map(g=>g.fieldGoalsAttempted)),fgPct:fga?100*fgm/fga:null,effectiveFgPct:fga?100*(fgm+.5*tpm)/fga:null,threePct:tpa?100*sum(three,'threes')/tpa:null,usagePct:mean(usage.map(g=>g.usagePercentage)),estimatedUsagePct:estimated.percentage,usageGames:estimated.games,assistsPer36:per36(gs,'assists'),reboundsPer36:per36(gs,'rebounds'),turnoversPer36:per36(gs,'turnovers'),shotAttemptsPer36:paired.length&&sum(paired,'minutes')?36*fga/sum(paired,'minutes'):null,defensiveEventsPer36:defensive.length&&sum(defensive,'minutes')?36*(sum(defensive,'steals')+sum(defensive,'blocks')+sum(defensive,'defensiveRebounds'))/sum(defensive,'minutes'):null,netPointsPer36:gs.some(g=>n(g.plusMinus)!==null)?36*sum(gs.filter(g=>n(g.plusMinus)!==null),'plusMinus')/sum(gs.filter(g=>n(g.plusMinus)!==null),'minutes'):null,availability:player.availability?.status||'Unknown',efficiencyGames:paired.length};
 }
 function rotation(roster,teamId){
  const events=new Map();for(const p of roster)for(const g of p.gameLogs||[])if(String(g.teamId)===String(teamId))events.set(g.eventId||g.date,g.date);
@@ -97,5 +106,5 @@ function predict(teams,roster,awayId,homeId,model,asOf){
  const residuals=model?.residuals||[];
  return {away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
 }
-const api={n,mean,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
+const api={n,mean,freeThrowsSummary,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
