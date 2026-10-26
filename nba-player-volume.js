@@ -1,5 +1,18 @@
 "use strict";
 (function(){
+ const cache=new Map();
+ async function loadEspn(player){
+  const id=String(player.playerId||"");
+  if(!/^\d+$/.test(id))return [];
+  if(!cache.has(id))cache.set(id,(async()=>{
+   const url="https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/"+encodeURIComponent(id)+"/gamelog?season=2026&seasontype=2";
+   const response=await fetch(url);
+   if(!response.ok)throw Error("ESPN HTTP "+response.status);
+   if(typeof docEspnRows!=="function")return [];
+   return docEspnRows(await response.json());
+  })());
+  try{return await cache.get(id);}catch(e){cache.delete(id);return [];}
+ }
  const keys=[["minutes","Minutes",["minutes","min"]],["usage","Usage %",["usagePercentage","usagePct","usage","usgPct"]],["fieldGoalsAttempted","FG attempts",["fieldGoalsAttempted","fga"]],["fieldGoalsMade","FG made",["fieldGoalsMade","fgm"]],["threePointersAttempted","3PT attempts",["threePointersAttempted","threePointAttempts","3pa"]],["threePointersMade","3PT made",["threePointersMade","threes","3pm"]],["points","Points",["points"]],["rebounds","Rebounds",["rebounds"]],["assists","Assists",["assists"]],["reboundChances","Rebound chances",["reboundChances"]],["potentialAssists","Potential assists",["potentialAssists"]]];
  const numeric=v=>v===null||v===undefined||v===""?null:Number.isFinite(Number(v))?Number(v):null;
  const get=(g,aliases)=>{for(const k of aliases){const n=numeric(g?.[k]);if(n!==null)return n;}return null;};
@@ -14,6 +27,7 @@
   const espn=typeof docAttemptCache!=="undefined"?docAttemptCache.get(String(selectedPlayerId)):null;
   Promise.resolve(espn).then(rows=>{if(!section.isConnected||String(selectedPlayerId)!==String(player.playerId))return;render(section,player,historical,Array.isArray(rows)?rows:[]);}).catch(()=>render(section,player,historical,[]));
   render(section,player,historical,[]);
+  loadEspn(player).then(rows=>{if(section.isConnected&&String(selectedPlayerId)===String(player.playerId))render(section,player,historical,rows);});
  }
  function render(el,player,history,attempts){
   const map=new Map();
