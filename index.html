@@ -1444,8 +1444,7 @@ function docBindRolling(player){
 /* Attempts Intelligence — shown for every player; missing data is never zero-filled. */
 const DOC_ATTEMPTS=[
  ["fieldGoalsMade","fieldGoalsAttempted","Field goals (FGM/FGA)"],
- ["threePointersMade","threePointersAttempted","Three-pointers (3PM/3PA)"],
- ["freeThrowsMade","freeThrowsAttempted","Free throws (FTM/FTA)"]
+ ["threePointersMade","threePointersAttempted","Three-pointers (3PM/3PA)"]
 ];
 function docAttemptValue(g,aliases){
  for(const k of aliases){const v=numberOrNull(g?.[k]);if(v!==null)return v;}
@@ -1654,7 +1653,7 @@ function openPlayer(id){
     </div>
 
     <div class="sectionline"></div>
-    ${docAttemptsPanel(player)}
+    
     <div class="sectionline"></div>
     <h3 class="gold">Player Statistical Comparison</h3>
     <div class="scroll">
@@ -1721,7 +1720,7 @@ function openPlayer(id){
 
   docBindRolling(player);
   $("modal").classList.add("open");
-  docLoadAttempts(player);
+  // Historical shooting enrichment is loaded by the unified player volume module.
   document.body.style.overflow="hidden";
 }
 
@@ -2007,5 +2006,5 @@ loadEngine();
 <script src="./nba-player-props.js?v=20261023-last20-70-80"></script>
 <script src="./nba-matchup-board.js"></script>
 <script src="./nba-prop-receipts.js?v=20261020-fullresearch1"></script>
-<script src="./nba-player-volume.js?v=20261025-clean2"></script>\n</body>
+<script src="./nba-player-volume.js?v=20261025-unified3"></script>\n</body>
 </html>
