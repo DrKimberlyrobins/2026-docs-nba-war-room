@@ -4,14 +4,45 @@
 const n=v=>v===null||v===undefined||v===''?null:Number.isFinite(Number(v))?Number(v):null;
 const mean=a=>{const xs=a.map(n).filter(x=>x!==null);return xs.length?xs.reduce((s,x)=>s+x,0)/xs.length:null;};
 const sum=(gs,k)=>gs.reduce((s,g)=>s+(n(g[k])??0),0);
+// Standard box-score USG estimate. Team totals are reconstructed from matched player logs.
+function usageGame(g,context=g?.usageContext){
+ const fields=['minutes','fieldGoalsAttempted','freeThrowsAttempted','turnovers'];
+ if(!context||fields.some(k=>n(g[k])===null||n(g[k])<0)||!(g.minutes>0))return null;
+ if(['minutes','fieldGoalsAttempted','freeThrowsAttempted','turnovers'].some(k=>n(context[k])===null||n(context[k])<0)||!(context.minutes>0))return null;
+ const used=g.fieldGoalsAttempted+.44*g.freeThrowsAttempted+g.turnovers;
+ const exposure=g.minutes*(context.fieldGoalsAttempted+.44*context.freeThrowsAttempted+context.turnovers)/(context.minutes/5);
+ return exposure>0?{used,exposure,percentage:100*used/exposure}:null;
+}
+function usageSummary(logs){
+ const matched=(logs||[]).map(g=>usageGame(g)).filter(Boolean);
+ const used=matched.reduce((a,x)=>a+x.used,0),exposure=matched.reduce((a,x)=>a+x.exposure,0);
+ return {percentage:exposure?100*used/exposure:null,games:matched.length,used,exposure};
+}
+function connectUsage(players){
+ const groups=new Map();
+ for(const p of players)for(const g of p.gameLogs||[]){
+  delete g.usageContext;delete g.estimatedUsagePct;
+  if(!g.eventId||!g.teamId)continue;
+  const key=String(g.eventId)+':'+String(g.teamId),group=groups.get(key)||[];group.push(g);groups.set(key,group);
+ }
+ for(const rows of groups.values()){
+  const fields=['minutes','fieldGoalsAttempted','freeThrowsAttempted','turnovers'];
+  if(rows.some(g=>fields.some(k=>n(g[k])===null||n(g[k])<0))||new Set(rows.map(g=>g.playerId)).size!==rows.length)continue;
+  const context=Object.fromEntries(fields.map(k=>[k,sum(rows,k)]));
+  if(rows.length<5||context.minutes<230)continue;
+  for(const g of rows){const x=usageGame(g,context);if(x){g.usageContext=context;g.estimatedUsagePct=x.percentage;}}
+ }
+ return players;
+}
+function per36(gs,key){const valid=gs.filter(g=>n(g[key])!==null&&n(g.minutes)>0);return valid.length?36*sum(valid,key)/sum(valid,'minutes'):null;}
 function impact(player){
  const gs=(player.gameLogs||[]).filter(g=>n(g.minutes)>0),minutes=sum(gs,'minutes');
  const paired=gs.filter(g=>n(g.fieldGoalsMade)!==null&&n(g.fieldGoalsAttempted)!==null&&n(g.threes)!==null);
  const fga=sum(paired,'fieldGoalsAttempted'),fgm=sum(paired,'fieldGoalsMade'),tpm=sum(paired,'threes');
  const three=gs.filter(g=>n(g.threePointersAttempted)!==null&&n(g.threes)!==null),tpa=sum(three,'threePointersAttempted');
  const defensive=gs.filter(g=>n(g.steals)!==null&&n(g.blocks)!==null&&n(g.defensiveRebounds)!==null);
- const usage=gs.filter(g=>n(g.usagePercentage)!==null);
- return {games:gs.length,minutes:mean(gs.map(g=>g.minutes)),points:mean(gs.map(g=>g.points)),pointsPerMinute:minutes?sum(gs,'points')/minutes:null,fieldGoalsAttempted:mean(paired.map(g=>g.fieldGoalsAttempted)),fgPct:fga?100*fgm/fga:null,effectiveFgPct:fga?100*(fgm+.5*tpm)/fga:null,threePct:tpa?100*sum(three,'threes')/tpa:null,usagePct:mean(usage.map(g=>g.usagePercentage)),shotAttemptsPer36:paired.length&&sum(paired,'minutes')?36*fga/sum(paired,'minutes'):null,defensiveEventsPer36:defensive.length&&sum(defensive,'minutes')?36*(sum(defensive,'steals')+sum(defensive,'blocks')+sum(defensive,'defensiveRebounds'))/sum(defensive,'minutes'):null,netPointsPer36:gs.some(g=>n(g.plusMinus)!==null)?36*sum(gs.filter(g=>n(g.plusMinus)!==null),'plusMinus')/sum(gs.filter(g=>n(g.plusMinus)!==null),'minutes'):null,availability:player.availability?.status||'Unknown',efficiencyGames:paired.length};
+ const usage=gs.filter(g=>n(g.usagePercentage)!==null),estimated=usageSummary(gs);
+ return {games:gs.length,minutes:mean(gs.map(g=>g.minutes)),points:mean(gs.map(g=>g.points)),pointsPerMinute:minutes?sum(gs,'points')/minutes:null,fieldGoalsAttempted:mean(paired.map(g=>g.fieldGoalsAttempted)),fgPct:fga?100*fgm/fga:null,effectiveFgPct:fga?100*(fgm+.5*tpm)/fga:null,threePct:tpa?100*sum(three,'threes')/tpa:null,usagePct:mean(usage.map(g=>g.usagePercentage)),estimatedUsagePct:estimated.percentage,usageGames:estimated.games,assistsPer36:per36(gs,'assists'),reboundsPer36:per36(gs,'rebounds'),turnoversPer36:per36(gs,'turnovers'),shotAttemptsPer36:paired.length&&sum(paired,'minutes')?36*fga/sum(paired,'minutes'):null,defensiveEventsPer36:defensive.length&&sum(defensive,'minutes')?36*(sum(defensive,'steals')+sum(defensive,'blocks')+sum(defensive,'defensiveRebounds'))/sum(defensive,'minutes'):null,netPointsPer36:gs.some(g=>n(g.plusMinus)!==null)?36*sum(gs.filter(g=>n(g.plusMinus)!==null),'plusMinus')/sum(gs.filter(g=>n(g.plusMinus)!==null),'minutes'):null,availability:player.availability?.status||'Unknown',efficiencyGames:paired.length};
 }
 function rotation(roster,teamId){
  const events=new Map();for(const p of roster)for(const g of p.gameLogs||[])if(String(g.teamId)===String(teamId))events.set(g.eventId||g.date,g.date);
@@ -64,7 +95,7 @@ function predict(teams,roster,awayId,homeId,model,asOf){
  const adjusted=a.complete&&h.complete&&a.adjustment!==null&&h.adjustment!==null;
  const away=p.away+(adjusted?a.adjustment:0),home=p.home+(adjusted?h.adjustment:0),margin=home-away;
  const residuals=model?.residuals||[];
- return {away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is unavailable unless supplied by source; shot rate is separately labeled.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
+ return {away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
 }
-const api={n,mean,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
+const api={n,mean,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

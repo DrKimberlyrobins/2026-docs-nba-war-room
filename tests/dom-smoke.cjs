@@ -10,7 +10,7 @@ assert.equal(w.eval('status.season'),'2026-27');assert.equal(w.eval('teams.lengt
 assert.equal(w.document.querySelectorAll('#awayTeam option').length,30);
 // Fixed three-game fixture in memory: the test must keep passing as the real season grows.
 w.eval("var smokePlayer=players.find(p=>p.name==='Bam Adebayo'); smokePlayer.gameLogs=smokePlayer.gameLogs.slice(0,3).map((g,i)=>({...g,points:[20,4,15][i]})); openPlayer(smokePlayer.playerId)");await delay();await delay();
-assert(w.document.querySelector('#docRealPlayerVolume'));assert(!w.document.querySelector('#docRealPlayerVolume').textContent.includes('Last 20'));assert(w.document.querySelector('#docRealPlayerVolume').textContent.includes('(3/3)')); assert(w.document.querySelector('#nbaPropPanel'));assert(w.document.querySelector('#saveVerifiedProp'));assert(!w.document.querySelector('#docRollingPanel'));
+assert(w.document.querySelector('#docRealPlayerVolume'));assert(!w.document.querySelector('#docRealPlayerVolume').textContent.includes('Last 20'));assert(w.document.querySelector('#docRealPlayerVolume').textContent.includes('(3/3)')); assert(w.document.querySelector('#nbaPropPanel'));assert(w.document.querySelector('#docRealPlayerVolume').textContent.includes('Usage % (estimated)'));assert(w.document.querySelector('#nbaImpactProjection thead').textContent.includes('Usage % (est.)')); assert(w.document.querySelector('#saveVerifiedProp'));assert(!w.document.querySelector('#docRollingPanel'));
 const controls=w.document.querySelectorAll('#nbaPropPanel input,#nbaPropPanel select');
 controls[1].value='10.5';controls[3].value='-110';controls[5].value='Kambi';controls[1].dispatchEvent(new w.Event('input'));
 assert.equal(w.document.querySelector('#nbaPropPanel').consistency.tier,'WATCH');
