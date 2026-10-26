@@ -13,7 +13,8 @@
   if(options.length===1)return options[0];
   const nick=norm(obj.name);const matched=teams.filter(t=>nick&&norm(t.team).endsWith(nick));return matched.length===1?matched[0]:null;
  }
- function selectGame(away,home){
+ function selectGame(away,home,event){
+  window.nbaSelectedGame={id:event.id,date:event.date,awayId:away.id,homeId:home.id};
   const a=findTeam(away),h=findTeam(home);
   if(!a||!h){status.textContent="This matchup could not be matched to both historical team records. No teams were guessed.";return;}
   document.getElementById("awayTeam").value=String(a.teamId);
@@ -79,7 +80,7 @@
     oddsNote.textContent=validSpread||(Number.isFinite(gameTotal)&&gameTotal>0)?"ESPN scoreboard odds · check source for current price":"Odds not provided by ESPN scoreboard";
     button.append(oddsNote);
     const meta=document.createElement("span");meta.className="small";meta.textContent=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(event.date))+" • "+(event.status?.type?.shortDetail||"Scheduled");button.prepend(meta);const action=document.createElement("div");action.textContent="Analyze Matchup";action.style.cssText="background:#28d99a;color:#061521;padding:9px;border-radius:6px;font-weight:bold";button.append(action);
-    button.addEventListener("click",()=>selectGame(away,home));cards.append(button);
+    button.addEventListener("click",()=>selectGame(away,home,event));cards.append(button);
    }
   }
   status.textContent=total+" NBA games loaded for "+fmt(dates[0])+"–"+fmt(dates[6])+" across "+(7-failed)+" of 7 days."+(failed?" "+failed+" day(s) failed to load; click Refresh Schedule to retry.":"")+" Source: ESPN daily scoreboard.";

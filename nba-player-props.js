@@ -1,6 +1,6 @@
 "use strict";
 (function(){
-const MARKETS=[["Points","points"],["Rebounds","rebounds"],["Assists","assists"],["3-pointers made","threes"],["Points + Rebounds + Assists","pra"],["Points + Rebounds","pr"],["Points + Assists","pa"],["Rebounds + Assists","ra"]];
+const MARKETS=[["Points","points"],["Rebounds","rebounds"],["Assists","assists"],["Blocks","blocks"],["Steals","steals"],["3-pointers made","threes"],["Points + Rebounds + Assists","pra"],["Points + Rebounds","pr"],["Points + Assists","pa"],["Rebounds + Assists","ra"]];
 const num=v=>v===null||v===undefined||v===""?null:Number.isFinite(Number(v))?Number(v):null;
 const percent=v=>(100*v).toFixed(1)+"%";
 const be=odds=>odds<0?-odds/(-odds+100):100/(odds+100);
@@ -12,7 +12,7 @@ function attach(){
  if(body.querySelector("#nbaPropPanel"))return;
  const panel=document.createElement("section");panel.id="nbaPropPanel";panel.className="panel";panel.style.marginTop="20px";
  const h=document.createElement("h3");h.textContent="NBA Player Props — Verified Game Logs";panel.append(h);
- const explain=document.createElement("p");explain.className="small";explain.textContent="Historical 2025–26 player logs. Last-20 consistency: 14/20 (70%) qualifies; 16/20 (80%) is strong. Enter a verified line and price; current-season data and odds are not invented.";panel.append(explain);
+ const explain=document.createElement("p");explain.className="small";explain.textContent="Selected-season verified player logs. Last-20 consistency: 14/20 (70%) qualifies; 16/20 (80%) is strong. Enter a verified line and price; odds require a verified source.";panel.append(explain);
  const grid=document.createElement("div");grid.className="grid";panel.append(grid);
  function field(label,tag){const wrap=document.createElement("label");wrap.textContent=label;wrap.style.display="block";const el=document.createElement(tag);el.style.marginTop="6px";wrap.append(el);grid.append(wrap);return el;}
  const market=field("Player prop","select");for(const [label,key] of MARKETS){const o=new Option(label,key);market.add(o);}
@@ -39,7 +39,7 @@ function attach(){
  const strongConsistency=recentHits!==null&&recentHits>=16;
  const oddsValid=!!priceData;
  const lines=[
- "Data: 2025–26 regular season (historical, not current-season)",
+ "Data: "+status.season+" regular season · "+status.generatedAt,
  "Recorded games: "+valid.length,
  "Last 20: "+(!complete?"INSUFFICIENT DATA ("+recent.length+"/20 verified)":r20===null?"enter line":hits(recent)+"/20 ("+percent(r20)+")"),
  "Season hit rate (reference): "+(rAll===null?"enter line":hits(valid)+"/"+valid.length+" ("+percent(rAll)+")"),

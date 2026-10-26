@@ -1,0 +1,41 @@
+name: NBA Current Season Refresh
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */3 * * *'
+  push:
+    paths: ['scripts/**', 'tests/**', 'nba-impact*.js', '.github/workflows/nba-current.yml']
+permissions:
+  contents: write
+concurrency:
+  group: nba-current-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/*.test.js
+      - run: python -m unittest discover -s tests -p 'test_*.py'
+      - run: npm install --prefix /tmp/nba-qa jsdom@26.1.0 --no-audit --no-fund
+      - run: NODE_PATH=/tmp/nba-qa/node_modules node tests/dom-smoke.cjs
+      - run: python scripts/refresh_current.py
+      - run: node scripts/build_model.js
+      - run: node --test tests/*.test.js
+      - name: Commit reconciled snapshot
+        run: |
+          git config user.name 'NBA War Room data engine'
+          git config user.email 'nba-engine@users.noreply.github.com'
+          git add data/nba-current.json data/nba-probability-model.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh verified current-season NBA snapshot and model checks'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

@@ -174,7 +174,7 @@ footer{padding:25px;text-align:center;color:var(--muted)}
       </div>
     </div>
     <p class="small">
-      Historical 2025–26 regular-season averages and home/away splits.
+      Regular-season averages and home/away splits for the selected data season.
       Current injuries and confirmed lineups are not yet included.
     </p>
     <div class="actions">
@@ -193,7 +193,7 @@ footer{padding:25px;text-align:center;color:var(--muted)}
     <input id="matchupPlayerSearch" type="search" placeholder="Start typing a player name..." autocomplete="off" aria-controls="matchupPlayerSuggestions">
     <div id="matchupPlayerSuggestions" class="panel" style="display:none;margin-top:8px;padding:8px" role="listbox"></div>
     <p class="small">
-      Players are grouped by their last recorded 2025–26 team.
+      Current mode uses verified current rosters. Historical mode groups players by last recorded team.
       These are historical roster associations, not confirmed
       current rosters or tonight's active lineups.
     </p>
@@ -309,7 +309,7 @@ footer{padding:25px;text-align:center;color:var(--muted)}
   <div class="panel">
     <h2>War Room Command Center</h2>
     <p class="muted">
-      Historical NBA intelligence from the 2025–26 regular season.
+      NBA intelligence with explicit season, source and refresh timestamps.
       Data quality remains provisional pending final reconciliation.
     </p>
     <div id="overviewStats" class="grid"></div>
@@ -344,6 +344,8 @@ footer{padding:25px;text-align:center;color:var(--muted)}
   Doc's NBA War Room • Research First • Prove It • No Edge = PASS
 </footer>
 
+<script src="./nba-impact-engine.js"></script>
+<script src="./nba-impact-ui.js"></script>
 <script>
 "use strict";
 
@@ -441,6 +443,7 @@ async function fetchJSON(path){
 
 async function loadEngine(){
   try{
+    if(!NBAView.prepared){await nbaPrepare();NBAView.prepared=true;}
     const [playerData,teamData,qualityData]=await Promise.all([
       fetchJSON(FILES.players),
       fetchJSON(FILES.teams),
@@ -452,15 +455,19 @@ async function loadEngine(){
       throw new Error("Unexpected engine JSON structure.");
     }
 
-    players=playerData.players;
-    teams=teamData.teams;
-    status=qualityData;
+    const active=NBAView.mode==='current'?NBAView.current:null;
+    if(NBAView.mode==='current'&&!active)NBAView.mode='historical';
+    players=active?active.players:playerData.players;
+    teams=active?active.teams:teamData.teams;
+    status=active||qualityData;
+    nbaVerifiedStats.clear();
+    nbaSourceControls();
 
     playerById=new Map(players.map(p=>[String(p.playerId),p]));
     teamById=new Map(teams.map(t=>[String(t.teamId),t]));
 
     $("statusBadge").textContent=
-      "ENGINE CONNECTED • HISTORICAL DATA PROVISIONAL";
+      "ENGINE CONNECTED • "+status.season+" • "+status.dataStatus;
 
     renderOverview();
     populateTeams();
@@ -485,7 +492,7 @@ async function loadEngine(){
 
 function renderOverview(){
   $("overviewStats").innerHTML=[
-    statCard("Historical Games",status.gamesProcessed??"—"),
+    statCard("Completed Games",status.gamesProcessed??"—"),
     statCard("Players",players.length),
     statCard("Teams",teams.length),
     statCard("Player Game Records",status.playerRecords??"—"),
@@ -504,9 +511,7 @@ function renderOverview(){
       ${statCard("Betting Qualification","DISABLED")}
     </div>
     <p class="small">
-      Source: ESPN • Historical 2025–26 regular season.
-      Event-count reconciliation, rejected-row review,
-      and projection backtesting remain outstanding.
+      Source: ESPN • ${safe(status.season)} regular season. Updated ${safe(status.generatedAt)}. Current-season snapshots reconcile box-score totals. Historical baseline remains provisional; experimental model validation is shown in each matchup.
     </p>`;
 }
 
@@ -645,7 +650,7 @@ function expandedTeamIntelligence(away,home){
   }
   return '<div class="panel" id="gameFormIntelligence">'+
     '<h3>Team Form & Defensive Intelligence</h3>'+
-    '<p class="small">2025–26 historical records only. Scored / Allowed / Margin; sample counts show matched opponent records. Road and home samples are separate from season samples. No current-season or injury adjustment.</p>'+
+    '<p class="small">Selected-season records. Scored / Allowed / Margin; sample counts show matched opponent records. Road and home samples are separate. Injury scenarios appear in the probability engine above.</p>'+
     '<div class="scroll"><table><thead><tr><th>Sample</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+
     row("Season • full game",af.all,hf.all,"fullGame")+
     row("Road vs Home • full game",a.all,h.all,"fullGame")+
@@ -729,7 +734,7 @@ function visualTeamSummary(away,home){
   const margins=[as.margin,hs.margin,qA,qH,halfA,halfH,ar?.margin??null,hr?.margin??null].filter(v=>v!==null&&Number.isFinite(v));
   const sharedMarginScale=Math.max(5,Math.ceil(Math.max(0,...margins)/5)*5,Math.ceil(Math.abs(Math.min(0,...margins))/5)*5);
   return '<section class="panel team-visual" id="gameVisualSummary"><h2>Matchup at a Glance</h2>'+
-    '<span class="tv-tag">2025–26 historical data · not a live prediction</span>'+
+    '<span class="tv-tag">Selected-season descriptive statistics</span>'+
     '<div class="tv-grid">'+card(away,as,ar)+card(home,hs,hr)+'</div>'+
     '<div class="tv-section"><h3>Who has the advantage?</h3>'+
     '<div class="tv-callout"><strong>Offense:</strong> '+leader(as.full,hs.full,true)+
@@ -778,7 +783,7 @@ function gameInteriorNavigation(away,home){
  '<div class="inside-team">'+logo(away)+'<strong>'+safe(away.team)+'</strong><span>Away</span></div>'+
  '<div class="inside-versus">@</div>'+
  '<div class="inside-team">'+logo(home)+'<strong>'+safe(home.team)+'</strong><span>Home</span></div></div>'+
- '<p class="small">Historical 2025–26 research · not a current-season forecast</p>'+
+ '<p class="small">Selected-season research · scoring estimates are experimental</p>'+
  '<div class="game-nav-links" role="tablist" aria-label="Matchup research">'+
  '<button type="button" class="inside-tab active" data-inside="matchup" role="tab" aria-selected="true">Matchup</button>'+
  '<button type="button" class="inside-tab" data-inside="leaders" role="tab" aria-selected="false">Top Performers</button>'+
@@ -822,9 +827,9 @@ function docRenderLeaders(away,home,period="season"){
 function docTopPerformers(away,home){
  return '<section class="panel doc-leaders" id="docTopPerformers">'+
  '<h2>🏆 Top Performers Intelligence</h2>'+
- '<p class="small">Verified historical 2025–26 player averages, grouped by last recorded team — NOT confirmed current rosters or 2026–27 projections. Players with missing stats are excluded. Click a player for their intelligence profile.</p>'+
+ '<p class="small">Selected-season player averages. Current mode uses current rosters; historical mode uses last recorded team. Missing stats are excluded. Click a player for minutes, attempts and impact evidence.</p>'+
  '<div class="actions"><label for="docLeaderPeriod">Stat window</label>'+
- '<select id="docLeaderPeriod" style="width:auto"><option value="season">Season</option><option value="last5">Last 5 (complete only)</option><option value="last10">Last 10 (complete only)</option><option value="last20">Last 20 (complete only)</option></select></div>'+
+ '<select id="docLeaderPeriod" style="width:auto"><option value="season">Season</option><option value="last5">Last 5 (complete only)</option><option value="last10">Last 10 (complete only)</option></select></div>'+
  '<div id="docLeadersBody"></div>'+
  '<p class="notice">Historical research only. Current-season games, verified injuries, defensive matchup, and live Kambi/Kalshi lines must be checked before evaluating a prop. No automatic betting qualification.</p></section>';
 }
@@ -888,11 +893,23 @@ function nbaParseSeasonStats(payload){
 }
 async function nbaFetchVerifiedTeamStats(team){
  const id=String(team.teamId);
+ if(NBAView.mode==='current'){
+  const logs=players.flatMap(p=>p.gameLogs||[]).filter(g=>String(g.teamId)===id),gp=team.gameLogs.length;
+  if(!gp)return null;
+  const total=k=>logs.reduce((sum,g)=>sum+(numberOrNull(g[k])??0),0);
+  const stats={};
+  for(const k of ['rebounds','offensiveRebounds','defensiveRebounds','assists','turnovers','steals','blocks','fieldGoalsMade'])stats[k]=total(k)/gp;
+  stats.threePointFieldGoalsMade=total('threes')/gp;
+  stats.fieldGoalPct=total('fieldGoalsAttempted')?100*total('fieldGoalsMade')/total('fieldGoalsAttempted'):null;
+  stats.threePointFieldGoalPct=total('threePointersAttempted')?100*total('threes')/total('threePointersAttempted'):null;
+  stats.effectiveFieldGoalPct=total('fieldGoalsAttempted')?100*(total('fieldGoalsMade')+.5*total('threes'))/total('fieldGoalsAttempted'):null;
+  nbaVerifiedStats.set(id,stats);nbaStatDenominators.set(id,gp);return stats;
+ }
  if(nbaVerifiedStats.has(id))return nbaVerifiedStats.get(id);
  if(nbaVerifiedPending.has(id))return nbaVerifiedPending.get(id);
  const task=(async()=>{
   try{
-   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/"+encodeURIComponent(id)+"/statistics?season="+NBA_STAT_SEASON+"&seasontype=2";
+   const url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/"+encodeURIComponent(id)+"/statistics?season="+(status.espnSeason||NBA_STAT_SEASON)+"&seasontype=2";
    const response=await fetch(url,{headers:{Accept:"application/json"}});
    if(!response.ok)throw Error("ESPN HTTP "+response.status);
    const payload=await response.json();
@@ -914,7 +931,7 @@ async function nbaLoadMatchupStatistics(away,home){
  if(!target.isConnected||host.querySelector("#nbaVerifiedStatStatus")!==target)return;
  const count=results.map(x=>x?Object.keys(x).length:0);
  target.textContent=count.every(Boolean)?
-  "ESPN season metrics normalized to per-game when verified ("+count.join(" / ")+" metrics).":
+  "ESPN selected-season metrics from verified denominators ("+count.join(" / ")+" metrics).":
   "ESPN season-stat data unavailable or missing verified games played. Historical scoring remains visible; missing fields show —.";
  const current=host.querySelector(".full-stat-dashboard");
  if(!current)return;
@@ -944,7 +961,7 @@ function fullTeamStatDashboard(away,home){
    ["Points per game","points",false],["Points allowed","allowed",true],["Scoring margin","margin",false],
    ["Rebounds","rebounds"],["Offensive rebounds","offensiveRebounds"],["Defensive rebounds","defensiveRebounds"],["Assists","assists"],["Turnovers","turnovers",true],["Steals","steals"],["Blocks","blocks"],["Fouls","fouls",true]]],
   ["Shooting",[
-   ["Field goals made","fieldGoalsMade"],["Field goal %","fieldGoalPct"],["3-pointers made","threePointFieldGoalsMade"],["3-point %","threePointFieldGoalPct"],["Free throws made","freeThrowsMade"],["Free throw %","freeThrowPct"]]],
+   ["Field goals made","fieldGoalsMade"],["Field goal %","fieldGoalPct"],["3-pointers made","threePointFieldGoalsMade"],["3-point %","threePointFieldGoalPct"]]],
   ["Advanced efficiency",[
    ["Pace","pace"],["Effective FG %","effectiveFieldGoalPct"],["True shooting %","trueShootingPct"],["Offensive rating","offensiveRating"],["Defensive rating","defensiveRating",true],["Net rating","netRating"]]],
   ["Scoring sources",[
@@ -958,7 +975,7 @@ function fullTeamStatDashboard(away,home){
   return '<tr><th scope="row">'+label+'</th>'+cell(away,a,"away")+cell(home,h,"home")+'</tr>';
  }).join("")).join("");
  return '<section class="panel full-stat-dashboard"><h2>Complete Team Statistics</h2>'+
-  '<p class="small">2025–26 historical season · Scoring from matched game logs; additional statistics from ESPN when available. Missing metrics remain unavailable.</p>'+
+  '<p class="small">Selected-season scoring from matched game logs; additional ESPN season metrics when available. Missing metrics remain unavailable.</p>'+
   '<div class="small" id="nbaVerifiedStatStatus">Checking ESPN season statistics…</div><div class="scroll"><table class="full-stat-table"><thead><tr><th>STAT</th><th>'+safe(away.team)+'</th><th>'+safe(home.team)+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
   '<p class="small">— = not connected to a verified team-stat source. Season totals are converted to per-game only with confirmed games played. Shooting percentages are displayed as percentages. A highlighted number indicates a descriptive advantage, not a betting edge.</p></section>';
 }
@@ -981,7 +998,7 @@ function matchupComparisonBoard(away,home){
    '<p class="compare-explain">'+(ok?'Difference: '+delta.toFixed(1)+' points · '+safe(winner)+(lower?' (lower is better)':''):'Not enough matched historical records')+'</p></div>';
  };
  return '<section class="panel matchup-compare"><h2>Side-by-Side Team Comparison</h2>'+
- '<p class="small">Same scale for both teams within each metric. A 1-point difference appears small; bar length starts at zero. Historical 2025–26 games only.</p>'+
+ '<p class="small">Same scale for both teams within each metric. A 1-point difference appears small; bar length starts at zero. Selected-season games only.</p>'+
  '<div class="compare-head"><strong>'+safe(away.team)+'</strong><strong>'+safe(home.team)+'</strong></div>'+
  line('Season · Points scored per game',awaySeason.scored,homeSeason.scored)+
  line('Season · Points allowed per game',awaySeason.allowed,homeSeason.allowed,true)+
@@ -997,7 +1014,7 @@ function matchupEvidence(away,home){
  const f=x=>x===null||!Number.isFinite(x)?"unavailable":x.toFixed(1);
  const edge=(x,y,low=false)=>x===null||y===null?"Insufficient data":Math.abs(x-y)<0.05?"Essentially even":safe((low?x<y:x>y)?away.team:home.team);
  const narrative=(title,body)=>'<article class="evidence-card"><h3>'+title+'</h3><p>'+body+'</p></article>';
- return '<section class="panel evidence-analysis"><h2>Game Analysis · What the Numbers Say</h2><p class="small">Based only on 2025–26 historical records. This is not a live injury report or win prediction.</p>'+
+ return '<section class="panel evidence-analysis"><h2>Game Analysis · What the Numbers Say</h2><p class="small">Selected-season scoring evidence. Availability and experimental win estimates appear in the probability engine above.</p>'+
  '<div class="evidence-grid">'+
  narrative('Offensive comparison',safe(away.team)+' averaged '+f(as.scored)+' points per game; '+safe(home.team)+' averaged '+f(hs.scored)+'. Historical season scoring advantage: <strong>'+edge(as.scored,hs.scored)+'</strong>.')+
  narrative('Defensive comparison',safe(away.team)+' allowed '+f(as.allowed)+' points per game; '+safe(home.team)+' allowed '+f(hs.allowed)+'. Lower is better. Historical defense advantage: <strong>'+edge(as.allowed,hs.allowed,true)+'</strong>.')+
@@ -1138,6 +1155,7 @@ function analyzeTeams(){
       </div>
     </div></div>`;
 
+  nbaRenderProbability(away,home);
   renderMatchupPlayers();
   docInitLeaders(away,home);
   nbaLoadMatchupStatistics(away,home);
@@ -1386,7 +1404,7 @@ function currentMatchupContext(player){
   return {
     opponent:isAway?home.team:away.team,
     matchup:away.team+" @ "+home.team,
-    gameDate:""
+    gameDate:window.nbaSelectedGame&&String(window.nbaSelectedGame.awayId)===String(away.teamId)&&String(window.nbaSelectedGame.homeId)===String(home.teamId)?new Intl.DateTimeFormat("en-CA",{timeZone:"America/Chicago"}).format(new Date(window.nbaSelectedGame.date)):""
   };
 }
 
@@ -1532,6 +1550,7 @@ function docEspnRows(payload){
  return [...unique.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
 }
 async function docLoadAttempts(player){
+ if(NBAView.mode==="current")return;
  const id=String(player.playerId||"");
  if(!/^\\d+$/.test(id))return;
  const target=document.getElementById("docAttemptsIntelligence");
@@ -1620,7 +1639,7 @@ function openPlayer(id){
     <p class="muted">
       ${safe(player.lastRecordedTeam)}
       • ${safe(player.gamesPlayed)} historical games
-      • 2025–26 regular season
+      • ${safe(status.season)} regular season
     </p>
 
     <div class="panel">
@@ -1718,10 +1737,11 @@ function openPlayer(id){
       </table>
     </div>`;
 
-  docBindRolling(player);
+
   $("modal").classList.add("open");
   // Historical shooting enrichment is loaded by the unified player volume module.
   document.body.style.overflow="hidden";
+  nbaPlayerImpact(player);
 }
 
 function closeModal(){
@@ -1762,7 +1782,7 @@ function makePlayerRecord(player,signals,context){
   // record ID. Apps Script checks it to avoid duplicate rows.
   const recordId=[
     "NBA",
-    "2025-26",
+    status.season,
     String(player.playerId),
     context.matchup||"ALL_PLAYERS",
     "RESEARCH"
@@ -1777,7 +1797,7 @@ function makePlayerRecord(player,signals,context){
     opponent:context.opponent||"",
     matchup:context.matchup||"",
     gameDate:context.gameDate||"",
-    season:"2025-26",
+    season:status.season,
     gamesPlayed:player.gamesPlayed,
     seasonAverages:season,
     last5Averages:five,
