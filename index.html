@@ -38,9 +38,9 @@ input:focus,select:focus{outline:2px solid var(--gold)}
 .notice{border-left:3px solid var(--gold);background:#1d2b3b;padding:13px;border-radius:6px;color:#e5edf7}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .scroll{overflow-x:auto}
-.nba-impact-scroll{max-height:clamp(240px,65vh,620px);overflow:auto;position:relative;scrollbar-gutter:stable}
+.nba-impact-scroll{max-height:none;height:auto;overflow-x:auto;position:relative}
 .nba-impact-scroll table{border-collapse:separate;border-spacing:0}
-.nba-impact-scroll thead th{position:sticky;top:0;z-index:2;background:#172943;box-shadow:0 1px 0 var(--line)}
+.nba-impact-scroll thead th{position:static;top:auto;z-index:auto;background:#172943;box-shadow:none}
 .nba-impact-scroll:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 table{width:100%;border-collapse:collapse;min-width:570px}
 th,td{padding:11px;border-bottom:1px solid var(--line);text-align:left}
