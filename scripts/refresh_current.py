@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor
+from injury_sources import espn_index, official_report, norm
 BASE='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/'
 ROOT=Path(__file__).resolve().parents[1]
 NOW=datetime.now(ZoneInfo('America/Chicago'))
@@ -92,7 +93,10 @@ def main():
         boards=list(pool.map(attempt,['scoreboard?dates='+(start+timedelta(days=i)).strftime('%Y%m%d') for i in range(days)]))
         rosters=list(pool.map(attempt,['teams/'+t['teamId']+'/roster?season='+str(YEAR) for t in historical]))
     injuries=attempt('injuries')
-    injury_map={str(i['athlete']['id']):i for team in (injuries or {}).get('injuries',[]) for i in team.get('injuries',[]) if i.get('athlete',{}).get('id')}
+    injury_map,unmatched=espn_index(injuries,list(zip(historical,rosters)))
+    official=None;official_error=None
+    try:official=official_report(f'{YEAR-1}-{str(YEAR)[2:]}',[t['team'] for t in historical])
+    except Exception as e:official_error=str(e)
     events={str(e['id']):e for b in boards if b for e in b.get('events',[]) if e.get('season',{}).get('year')==YEAR and e.get('season',{}).get('type')==2 and e.get('status',{}).get('type',{}).get('completed')}
     with ThreadPoolExecutor(max_workers=6) as pool:summaries=list(pool.map(attempt,['summary?event='+eid for eid in events]))
     teamlogs={t['teamId']:[] for t in historical};playerlogs={};processed=[]
@@ -113,14 +117,19 @@ def main():
             logs=sorted(playerlogs.get(pid,[]),key=lambda g:g['date'],reverse=True)
             fields=['points','rebounds','assists','threes','minutes','steals','blocks']
             def averages(gs):return {k:sum(g[k] for g in gs if g.get(k) is not None)/len([g for g in gs if g.get(k) is not None]) if any(g.get(k) is not None for g in gs) else None for k in fields}
-            players.append(dict(playerId=pid,name=p['displayName'],lastRecordedTeam=team['team'],currentTeamId=team['teamId'],gamesPlayed=len(logs),seasonAverages=averages(logs),last5={'averages':averages(logs[:5]),'complete':len(logs)>=5,'available':min(5,len(logs))},last10={'averages':averages(logs[:10]),'complete':len(logs)>=10,'available':min(10,len(logs))},gameLogs=logs,availability={'status':inj['status'] if inj else 'Not listed' if injuries else 'Unknown','reportedAt':inj.get('date') if inj else None,'checkedAt':STAMP,'source':BASE+'injuries','comment':inj.get('shortComment','') if inj else ''}))
+            players.append(dict(playerId=pid,name=p['displayName'],lastRecordedTeam=team['team'],currentTeamId=team['teamId'],gamesPlayed=len(logs),seasonAverages=averages(logs),last5={'averages':averages(logs[:5]),'complete':len(logs)>=5,'available':min(5,len(logs))},last10={'averages':averages(logs[:10]),'complete':len(logs)>=10,'available':min(10,len(logs))},gameLogs=logs,availability={'status':inj['status'] if inj else 'Unknown' if unmatched or not injuries else 'Not listed','reportedAt':inj.get('date') if inj else None,'checkedAt':STAMP,'source':BASE+'injuries','comment':inj.get('shortComment','') if inj else ''}))
     teams=[]
     for t in historical:
         logs=sorted(teamlogs[t['teamId']],key=lambda g:g['date'],reverse=True)
         def avg(gs):return {k:sum(g[k] for g in gs)/len(gs) if gs else None for k in ['q1','firstHalf','fullGame']}
         teams.append(dict(teamId=t['teamId'],team=t['team'],gameLogs=logs,gamesPlayed=len(logs),seasonScoring=avg(logs),homeScoring=avg([g for g in logs if g['homeAway']=='home']),awayScoring=avg([g for g in logs if g['homeAway']=='away']),homeGames=sum(g['homeAway']=='home' for g in logs),awayGames=sum(g['homeAway']=='away' for g in logs)))
     status=dict(generatedAt=STAMP,season=f'{YEAR-1}-{str(YEAR)[2:]}',espnSeason=YEAR,seasonType='regular',source='ESPN scoreboard, summary, roster, injuries',gamesDiscovered=len(events),gamesProcessed=len(processed),uniquePlayers=len(players),playerRecords=sum(len(p['gameLogs']) for p in players),playersWithLast5=sum(p['gamesPlayed']>=5 for p in players),playersWithLast10=sum(p['gamesPlayed']>=10 for p in players),failedSummaries=errors,dataStatus='VERIFIED_BOX_SCORES' if not errors else 'PARTIAL',bettingQualificationEnabled=False,rostersLoaded=sum(r is not None for r in rosters),injuriesLoaded=injuries is not None)
-    payload=dict(**status,teams=teams,players=players)
+    status['injuryDiagnostics']={'espnMatched':len(injury_map),'espnUnmatched':unmatched,'officialError':official_error}
+    if injuries and not injury_map:
+        status['injuryDiagnostics']['error']='Injury feed matched no players; availability must remain Unknown'
+        for p in players:p['availability']['status']='Unknown'
+    payload=dict(**status,teams=teams,players=players,officialInjuries=official,scheduledGames=[e for b in boards if b for e in b.get('events',[]) if not e.get('status',{}).get('type',{}).get('completed')])
+
     # Publish only a useful complete snapshot. Preserve previous good snapshot on upstream failure.
     if errors or len(teams)!=30 or not players or len(processed)!=len(events):
         (ROOT/'data/nba-refresh-failure.json').write_text(json.dumps(status,indent=2));raise RuntimeError(f'refresh rejected: {errors[:3]}')
