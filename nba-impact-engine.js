@@ -70,6 +70,48 @@ function rotation(roster,teamId){
  }
  return {rows,adjustment:projected-baseline,baselinePoints:baseline,projectedPoints:projected,complete:rows.every(p=>p.status!=='Unknown'),uncertain:rows.filter(p=>/questionable|doubtful|day.to.day/i.test(p.status)).map(p=>p.name)};
 }
+function allocateMinutes(rows,budget=240){
+ const active=rows.filter(r=>!['out','suspended','suspension'].includes(String(r.status).toLowerCase())&&n(r.targetMinutes)>0);
+ for(const r of rows)r.projectedMinutes=0;
+ let remaining=budget,eligible=active.slice();
+ while(remaining>1e-8&&eligible.length){
+  const weight=eligible.reduce((s,r)=>s+r.targetMinutes,0);if(!weight)break;
+  const capped=eligible.filter(r=>remaining*r.targetMinutes/weight>r.minuteCap);
+  if(!capped.length){for(const r of eligible)r.projectedMinutes=remaining*r.targetMinutes/weight;remaining=0;break;}
+  for(const r of capped){r.projectedMinutes=r.minuteCap;remaining-=r.minuteCap;}
+  eligible=eligible.filter(r=>!capped.includes(r));
+ }
+ return {allocated:budget-remaining,unallocated:Math.max(0,remaining),feasible:remaining<1e-8};
+}
+function rotationV2(roster,teamId){
+ const events=new Map();for(const p of roster)for(const g of p.gameLogs||[])if(String(g.teamId)===String(teamId))events.set(g.eventId||g.date,g.date);
+ const recentIds=new Set([...events].sort((a,b)=>b[1].localeCompare(a[1])).slice(0,5).map(e=>e[0]));
+ const rows=roster.map(p=>{
+  const logs=(p.gameLogs||[]).filter(g=>String(g.teamId)===String(teamId)&&n(g.minutes)>0).sort((a,b)=>b.date.localeCompare(a.date));
+  const recent=logs.filter(g=>recentIds.has(g.eventId||g.date)),appearances=logs.slice(0,5),status=p.availability?.status||'Unknown';
+  const establishedStarter=appearances.length>0&&appearances.every(g=>g.starter===true);
+  const confirmedPlaying=['available','probable'].includes(status.toLowerCase());
+  // Restore a returning starter only with affirmative availability AND recorded starts.
+  const conditional=confirmedPlaying&&establishedStarter;
+  const target=conditional?mean(appearances.map(g=>g.minutes)):recentIds.size?sum(recent,'minutes')/recentIds.size:0;
+  return {playerId:p.playerId,name:p.name,status,games:logs.length,logs,minutes:mean(logs.map(g=>g.minutes)),targetMinutes:target||0,minuteCap:n(p.availability?.minutesLimit)===null?48:Math.max(0,Math.min(48,n(p.availability.minutesLimit))),minutesReason:!logs.length?'No recorded role; minutes unresolved':conditional?'Available/probable established starter: recent appearance minutes':'Recent team-game allocation; return role unconfirmed',...impact({...p,gameLogs:logs}),conditionalMinutes:mean(appearances.map(g=>g.minutes)),missingHistory:!logs.length};
+ });
+ const allocation=allocateMinutes(rows);
+ for(const r of rows){
+  for(const [field,key] of [['projectedAttempts','fieldGoalsAttempted'],['projectedThreeAttempts','threePointersAttempted'],['projectedThrees','threes'],['projectedRebounds','rebounds'],['projectedAssists','assists'],['projectedBlocks','blocks'],['projectedSteals','steals']]){const rate=per36(r.logs,key);r[field]=rate===null?null:rate*r.projectedMinutes/36;}
+  const paired=r.logs.filter(g=>['fieldGoalsMade','fieldGoalsAttempted','threes','freeThrowsMade'].every(k=>n(g[k])!==null));
+  const fga=sum(paired,'fieldGoalsAttempted');
+  // Field points are explicitly attempts × points per attempt; FT points remain in scoring.
+  const rate=per36(paired,'fieldGoalsAttempted');
+  r.projectedFieldPoints=fga&&rate!==null?r.projectedMinutes*rate/36*(2*sum(paired,'fieldGoalsMade')+sum(paired,'threes'))/fga:null;
+  const ft=per36(paired,'freeThrowsMade');r.projectedFreeThrowPoints=ft===null?null:ft*r.projectedMinutes/36;
+  r.projectedPoints=r.projectedFieldPoints===null||r.projectedFreeThrowPoints===null?null:r.projectedFieldPoints+r.projectedFreeThrowPoints;
+  r.projectedPRA=[r.projectedPoints,r.projectedRebounds,r.projectedAssists].every(v=>v!==null)?r.projectedPoints+r.projectedRebounds+r.projectedAssists:null;
+  delete r.logs;
+ }
+ return {rows,...allocation,complete:allocation.feasible&&rows.every(r=>!r.missingHistory&&r.status!=='Unknown'),uncertain:rows.filter(r=>/unknown|questionable|doubtful|day.to.day/i.test(r.status)).map(r=>r.name),adjustment:null,version:'rotation-v2',status:'CANDIDATE_REQUIRES_VALIDATION'};
+}
+
 function gamesFromTeams(teams){
  const map=new Map();for(const t of teams)for(const g of t.gameLogs||[]){if(n(g.fullGame)===null)continue;const e=map.get(String(g.eventId))||{};e[g.homeAway]=g;map.set(String(g.eventId),e);}
  return [...map.values()].filter(e=>e.home&&e.away&&String(e.home.opponentId)===String(e.away.teamId)&&String(e.away.opponentId)===String(e.home.teamId)).sort((a,b)=>a.home.date.localeCompare(b.home.date));
@@ -114,7 +156,7 @@ function predict(teams,roster,awayId,homeId,model,asOf,officialReport=null){
  const adjusted=false; // Player adjustments require held-out validation before activation.
  const away=p.away+(adjusted?a.adjustment:0),home=p.home+(adjusted?h.adjustment:0),margin=home-away;
  const residuals=model?.residuals||[];
- return {away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
+ return {awayCandidate:rotationV2(eligibleRoster.filter(x=>String(x.currentTeamId)===String(awayId)),awayId),homeCandidate:rotationV2(eligibleRoster.filter(x=>String(x.currentTeamId)===String(homeId)),homeId),away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
 }
-const api={n,mean,freeThrowsSummary,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
+const api={allocateMinutes,rotationV2,n,mean,freeThrowsSummary,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

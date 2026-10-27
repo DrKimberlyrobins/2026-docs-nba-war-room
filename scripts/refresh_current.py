@@ -76,7 +76,7 @@ def parse_game(d):
                 stats=parse_stats(block['labels'],row.get('stats',[]))
                 if not stats or stats.get('minutes') is None:raise ValueError('missing player minutes')
                 if any(stats.get(k) is None or stats[k]<0 for k in ['points','rebounds','assists','threes']):raise ValueError('missing player stats')
-                players.append(dict(eventId=event['id'],date=comp['date'],sourceUrl=BASE+'summary?event='+event['id'],playerId=str(row['athlete']['id']),name=row['athlete']['displayName'],teamId=tid,team=c['team']['displayName'],**stats))
+                players.append(dict(eventId=event['id'],date=comp['date'],sourceUrl=BASE+'summary?event='+event['id'],playerId=str(row['athlete']['id']),name=row['athlete']['displayName'],starter=row.get('starter'),position=row['athlete'].get('position',{}).get('abbreviation'),teamId=tid,team=c['team']['displayName'],**stats))
     if len({(p['teamId'],p['playerId']) for p in players})!=len(players):raise ValueError('duplicate player')
     for t in teams:
         if abs(sum(p['points'] for p in players if p['teamId']==t['teamId'])-t['fullGame'])>.01:raise ValueError('player points mismatch')
