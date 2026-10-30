@@ -40,6 +40,7 @@ jobs:
             git push
           fi
       - name: Export the full War Room with its separate simulator page
+        working-directory: .
         run: |
           mkdir -p /tmp/nba-pages
           git archive HEAD | tar -x -C /tmp/nba-pages
