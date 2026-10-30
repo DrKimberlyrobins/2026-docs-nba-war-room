@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent NBA Simulator. Read-only upstreams; 1,000 Monte Carlo draws.
+"""Independent NBA Simulator. Read-only upstreams; 10,000 Monte Carlo draws.
 
 Writes only inside this new project. Never updates either existing NBA room.
 """
@@ -17,8 +17,8 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
-VERSION='nba-simulator-1.0'
-RUNS=1000
+VERSION='nba-simulator-1.1'
+RUNS=10000
 CT=ZoneInfo('America/Chicago')
 ESPN='https://site.api.espn.com/apis/site/v2/sports/basketball/nba/'
 UPSTREAM='https://raw.githubusercontent.com/DrKimberlyrobins/2026-docs-nba-war-room/main/data/'
@@ -318,7 +318,7 @@ def build(root,now,start,days=3,offline=False):
     result={'title':"DOC'S NBA SIMULATOR",'version':VERSION,'runs':RUNS,'updatedAt':stamp(max(now,datetime.now(timezone.utc))),
             'forecasts':sorted(views,key=lambda f:f['tip']),'issues':issues,'metrics':metrics(grades),
             'evidence':evidence,'sources':sources,
-            'method':'Ridge quarter scoring model: team offense, opponent defense and venue. Prior season weighted as six effective games per team. Exactly 1,000 joint historical residual draws; quarters accumulate into halves and regulation. Historical overtime pairs resolve tied regulation outcomes.',
+            'method':'Ridge quarter scoring model: team offense, opponent defense and venue. Prior season weighted as six effective games per team. Exactly 10,000 joint historical residual draws; quarters accumulate into halves and regulation. Historical overtime pairs resolve tied regulation outcomes.',
             'limitations':['Prospective accuracy is not yet established.',
                            'Team score model does not yet adjust for confirmed injury or rotation changes.',
                            'Prior-season source is labeled provisional; current-season box scores are preferred.',

@@ -26,13 +26,13 @@ class SimulatorTests(unittest.TestCase):
                    'home':{'id':'B','name':'Home','abbr':'B','score':None,'quarters':[]},
                    'market':{'homeSpread':-3.5,'total':215.5,'provider':'Test','fetchedAt':b.stamp(self.now)}}
 
-    def test_exactly_1000_and_coherent_periods(self):
+    def test_exactly_10000_and_coherent_periods(self):
         sim=b.simulate(self.game,self.history,self.now)
-        self.assertEqual(sim['runs'],1000)
+        self.assertEqual(sim['runs'],10000)
         for p in sim['periods'].values():
-            self.assertEqual(p['awayWins']+p['homeWins']+p['ties'],1000)
+            self.assertEqual(p['awayWins']+p['homeWins']+p['ties'],10000)
             for key in ('away','home','total','margin'):
-                self.assertEqual(sum(c for v,c in p[key]['hist']),1000)
+                self.assertEqual(sum(c for v,c in p[key]['hist']),10000)
             self.assertAlmostEqual(p['away']['mean']+p['home']['mean'],p['total']['mean'],delta=.02)
         for side in ('away','home','total'):
             means=[sim['periods'][p][side]['mean'] for p in ('q1','h1','full')]

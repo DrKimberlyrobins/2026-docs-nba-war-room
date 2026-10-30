@@ -2,7 +2,7 @@
 
 A separate all-games NBA projection board. Neither existing NBA War Room is modified.
 
-Every matchup runs **exactly 1,000 simulations**, producing projected scores,
+Every matchup runs **exactly 10,000 simulations**, producing projected scores,
 winning side, spread direction, over/under direction, probabilities, outcome
 counts, and 10th–90th percentile ranges. Full-game quotes are captured automatically
 from the ESPN-listed provider. 1Q/1H projections are available without invented
