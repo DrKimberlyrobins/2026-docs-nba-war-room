@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Doc's independent NBA Simulator: 1,000 runs per matchup, all games, projected scores, sides, spreads and totals.">
+<title>NBA Simulator · Doc's Daily Projections</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<main>
+  <a class="room-link" href="../">← NBA War Room</a>
+  <header class="masthead">
+    <div><div class="eyebrow">DOC’S DAILY PROJECTION BOARD</div><h1>NBA SIMULATOR<span class="title-dot">.</span></h1><p>Every game. A score, a side, a spread, a total.</p></div>
+    <div class="run-badge"><strong>1,000</strong><span>RUNS PER GAME</span></div>
+  </header>
+  <div class="status-row"><span class="status-light"></span><span id="status" role="status">Loading the saved projections…</span><span id="version"></span></div>
+  <section class="toolbar" aria-label="Board controls">
+    <div class="day-switch"><button id="today" type="button">Today</button><button id="tomorrow" type="button">Tomorrow</button></div>
+    <label>Date · Central<input id="date" type="date"></label>
+    <label>Period<select id="period"><option value="full">Full game + OT</option><option value="h1">First half</option><option value="q1">First quarter</option></select></label>
+    <label class="search">Find a team<input type="search" id="search" placeholder="Team name or abbreviation"></label>
+  </section>
+  <div class="board-heading"><h2 id="boardTitle">Daily slate</h2><span id="gameCount"></span></div>
+  <div id="board" class="board" aria-live="polite"></div>
+  <section class="record-section"><div class="section-head"><div class="eyebrow">SAVE FIRST. GRADE AFTER.</div><h2>The simulator’s record</h2></div><p id="recordStatus"></p><div id="record"></div></section>
+  <details class="method"><summary>What goes into these 1,000 runs?</summary><p id="method"></p><div id="evidence"></div><ul id="limitations"></ul><div id="issues" role="status"></div></details>
+  <footer>DOC’S NBA SIMULATOR <span>Independent model · Central Time · Saved before tipoff</span></footer>
+</main>
+<script src="app.js?v=1"></script>
+</body></html>

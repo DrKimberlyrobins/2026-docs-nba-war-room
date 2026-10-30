@@ -1,0 +1,58 @@
+name: NBA Simulator — 1,000 Runs
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['nba-simulator/scripts/**', 'nba-simulator/tests/**', 'nba-simulator/index.html', 'nba-simulator/app.js', 'nba-simulator/style.css', '.github/workflows/nba-simulator.yml']
+  schedule:
+    - cron: '12,42 * * * *'
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: nba-simulator
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: nba-simulator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - name: Build independent forecasts and grade saved pregame receipts
+        run: python scripts/build.py --days 3
+      - name: Commit only this simulator's receipts and forecasts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh NBA Simulator 1000-run forecasts and grades'
+            git pull --rebase origin main
+            git push
+          fi
+      - name: Export the full War Room with its separate simulator page
+        run: |
+          mkdir -p /tmp/nba-pages
+          git archive HEAD | tar -x -C /tmp/nba-pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/nba-pages
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy separate NBA Simulator
+        id: deployment
+        uses: actions/deploy-pages@v4
