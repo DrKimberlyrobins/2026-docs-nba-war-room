@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   refresh:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -31,14 +32,16 @@ jobs:
           path: .nba-cache
           key: nba-espn-v1-${{ github.run_id }}
           restore-keys: nba-espn-v1-
+      - run: sudo apt-get update -qq && sudo apt-get install -y poppler-utils
       - run: python scripts/refresh_current.py
       - run: node scripts/build_model.js
+      - run: node scripts/archive_forecasts.js
       - run: node --test tests/*.test.js
       - name: Commit reconciled snapshot
         run: |
           git config user.name 'NBA War Room data engine'
           git config user.email 'nba-engine@users.noreply.github.com'
-          git add data/nba-current.json data/nba-probability-model.json
+          git add data/nba-current.json data/nba-probability-model.json data/forecasts
           if ! git diff --cached --quiet; then
             git commit -m 'Refresh verified current-season NBA snapshot and model checks'
             git pull --rebase origin main

@@ -56,16 +56,62 @@ function impact(player){
 function rotation(roster,teamId){
  const events=new Map();for(const p of roster)for(const g of p.gameLogs||[])if(String(g.teamId)===String(teamId))events.set(g.eventId||g.date,g.date);
  const recentIds=new Set([...events].sort((a,b)=>b[1].localeCompare(a[1])).slice(0,5).map(e=>e[0]));
- const rows=roster.map(p=>{const logs=(p.gameLogs||[]).filter(g=>String(g.teamId)===String(teamId)&&n(g.minutes)>0);const x=impact({...p,gameLogs:logs});const recent=logs.filter(g=>recentIds.has(g.eventId||g.date));return {playerId:p.playerId,name:p.name,...x,baseMinutes:events.size?sum(logs,'minutes')/events.size:0,targetMinutes:recentIds.size?sum(recent,'minutes')/recentIds.size:0,status:p.availability?.status||'Unknown'};}).filter(p=>p.games);
+ const rows=roster.map(p=>{const logs=(p.gameLogs||[]).filter(g=>String(g.teamId)===String(teamId)&&n(g.minutes)>0);const x=impact({...p,gameLogs:logs});const recent=logs.filter(g=>recentIds.has(g.eventId||g.date));return {playerId:p.playerId,name:p.name,...x,baseMinutes:events.size?sum(logs,'minutes')/events.size:0,targetMinutes:recentIds.size?sum(recent,'minutes')/recentIds.size:0,appearanceMinutes:recent.length?mean(recent.map(g=>g.minutes)):null,minutesEvidence:recent.length,status:p.availability?.status||'Unknown'};}).filter(p=>p.games);
  const baseTotal=rows.reduce((s,p)=>s+p.baseMinutes,0),active=rows.filter(p=>!['out','suspension','suspended'].includes(p.status.toLowerCase()));
  const total=active.reduce((s,p)=>s+p.targetMinutes,0);
  if(!baseTotal||!total)return {rows,adjustment:null,complete:false};
  // 240 regulation player-minutes; replacement minutes redistributed over active rotation.
  const baseline=rows.reduce((s,p)=>s+240*p.baseMinutes/baseTotal*p.pointsPerMinute,0);
  let projected=0;
- for(const p of rows){p.projectedMinutes=active.includes(p)?240*p.targetMinutes/total:0;p.projectedPoints=p.projectedMinutes*p.pointsPerMinute;projected+=p.projectedPoints;}
+ for(const p of rows){p.projectedMinutes=active.includes(p)?240*p.targetMinutes/total:0;p.projectedPoints=p.projectedMinutes*p.pointsPerMinute;projected+=p.projectedPoints;
+ // Candidate minutes are conditional on appearing. Keep separate from the unvalidated team model.
+ p.conditionalMinutes=p.appearanceMinutes;
+ for(const [field,key] of [['projectedAttempts','fieldGoalsAttempted'],['projectedThreeAttempts','threePointersAttempted'],['projectedThrees','threes'],['projectedRebounds','rebounds'],['projectedAssists','assists']]){const rate=per36((roster.find(x=>x.playerId===p.playerId)?.gameLogs||[]).filter(g=>String(g.teamId)===String(teamId)),key);p[field]=rate===null?null:rate*p.projectedMinutes/36;}
+ }
  return {rows,adjustment:projected-baseline,baselinePoints:baseline,projectedPoints:projected,complete:rows.every(p=>p.status!=='Unknown'),uncertain:rows.filter(p=>/questionable|doubtful|day.to.day/i.test(p.status)).map(p=>p.name)};
 }
+function allocateMinutes(rows,budget=240){
+ const active=rows.filter(r=>!['out','suspended','suspension'].includes(String(r.status).toLowerCase())&&n(r.targetMinutes)>0);
+ for(const r of rows)r.projectedMinutes=0;
+ let remaining=budget,eligible=active.slice();
+ while(remaining>1e-8&&eligible.length){
+  const weight=eligible.reduce((s,r)=>s+r.targetMinutes,0);if(!weight)break;
+  const capped=eligible.filter(r=>remaining*r.targetMinutes/weight>r.minuteCap);
+  if(!capped.length){for(const r of eligible)r.projectedMinutes=remaining*r.targetMinutes/weight;remaining=0;break;}
+  for(const r of capped){r.projectedMinutes=r.minuteCap;remaining-=r.minuteCap;}
+  eligible=eligible.filter(r=>!capped.includes(r));
+ }
+ return {allocated:budget-remaining,unallocated:Math.max(0,remaining),feasible:remaining<1e-8};
+}
+function rotationV2(roster,teamId){
+ const events=new Map();for(const p of roster)for(const g of p.gameLogs||[])if(String(g.teamId)===String(teamId))events.set(g.eventId||g.date,g.date);
+ const recentIds=new Set([...events].sort((a,b)=>b[1].localeCompare(a[1])).slice(0,5).map(e=>e[0]));
+ const rows=roster.map(p=>{
+  const logs=(p.gameLogs||[]).filter(g=>String(g.teamId)===String(teamId)&&n(g.minutes)>0).sort((a,b)=>b.date.localeCompare(a.date));
+  const recent=logs.filter(g=>recentIds.has(g.eventId||g.date)),appearances=logs.slice(0,5),status=p.availability?.status||'Unknown';
+  const establishedStarter=appearances.length>0&&appearances.every(g=>g.starter===true);
+  const confirmedPlaying=['available','probable'].includes(status.toLowerCase());
+  // Restore a returning starter only with affirmative availability AND recorded starts.
+  const conditional=confirmedPlaying&&establishedStarter;
+  const target=conditional?mean(appearances.map(g=>g.minutes)):recentIds.size?sum(recent,'minutes')/recentIds.size:0;
+  return {playerId:p.playerId,name:p.name,status,games:logs.length,logs,minutes:mean(logs.map(g=>g.minutes)),targetMinutes:target||0,minuteCap:n(p.availability?.minutesLimit)===null?48:Math.max(0,Math.min(48,n(p.availability.minutesLimit))),minutesReason:!logs.length?'No recorded role; minutes unresolved':conditional?'Available/probable established starter: recent appearance minutes':'Recent team-game allocation; return role unconfirmed',...impact({...p,gameLogs:logs}),conditionalMinutes:mean(appearances.map(g=>g.minutes)),missingHistory:!logs.length};
+ });
+ const allocation=allocateMinutes(rows);
+ for(const r of rows){
+  for(const [field,key] of [['projectedAttempts','fieldGoalsAttempted'],['projectedThreeAttempts','threePointersAttempted'],['projectedThrees','threes'],['projectedRebounds','rebounds'],['projectedAssists','assists'],['projectedBlocks','blocks'],['projectedSteals','steals']]){const rate=per36(r.logs,key);r[field]=rate===null?null:rate*r.projectedMinutes/36;}
+  const paired=r.logs.filter(g=>['fieldGoalsMade','fieldGoalsAttempted','threes','freeThrowsMade'].every(k=>n(g[k])!==null));
+  const fga=sum(paired,'fieldGoalsAttempted');
+  // Field points are explicitly attempts × points per attempt; FT points remain in scoring.
+  const rate=per36(paired,'fieldGoalsAttempted');
+  r.projectedFieldPoints=fga&&rate!==null?r.projectedMinutes*rate/36*(2*sum(paired,'fieldGoalsMade')+sum(paired,'threes'))/fga:null;
+  const ft=per36(paired,'freeThrowsMade');r.projectedFreeThrowPoints=ft===null?null:ft*r.projectedMinutes/36;
+  r.projectedPoints=r.projectedFieldPoints===null||r.projectedFreeThrowPoints===null?null:r.projectedFieldPoints+r.projectedFreeThrowPoints;
+  r.projectedPRA=[r.projectedPoints,r.projectedRebounds,r.projectedAssists].every(v=>v!==null)?r.projectedPoints+r.projectedRebounds+r.projectedAssists:null;
+  delete r.logs;
+ }
+ return {rows,...allocation,complete:allocation.feasible&&rows.every(r=>!r.missingHistory&&r.status!=='Unknown'),uncertain:rows.filter(r=>/unknown|questionable|doubtful|day.to.day/i.test(r.status)).map(r=>r.name),adjustment:null,version:'rotation-v2',status:'CANDIDATE_REQUIRES_VALIDATION'};
+}
+
 function gamesFromTeams(teams){
  const map=new Map();for(const t of teams)for(const g of t.gameLogs||[]){if(n(g.fullGame)===null)continue;const e=map.get(String(g.eventId))||{};e[g.homeAway]=g;map.set(String(g.eventId),e);}
  return [...map.values()].filter(e=>e.home&&e.away&&String(e.home.opponentId)===String(e.away.teamId)&&String(e.away.opponentId)===String(e.home.teamId)).sort((a,b)=>a.home.date.localeCompare(b.home.date));
@@ -94,17 +140,23 @@ function fit(teams){
  return {version:'scoring-residual-v1',residuals,validation:{method:'Chronological 70% residual fit / 30% held-out games; same-date results excluded from inputs',games:checks.length,brier:mean(checks.map(x=>(x.probability-x.win)**2)),accuracy:mean(checks.map(x=>(x.probability>=.5)===(x.win===1)?1:0)),marginMAE:mean(checks.map(x=>Math.abs(x.error))),coinFlipBrier:.25,calibrated:false,playerAdjustmentValidated:false},checks};
 }
 function cdf(margin,residuals){if(!residuals.length)return null;return (residuals.filter(r=>r> -margin).length+.5*residuals.filter(r=>r===-margin).length+1)/(residuals.length+2);}
-function predict(teams,roster,awayId,homeId,model,asOf){
+function predict(teams,roster,awayId,homeId,model,asOf,officialReport=null){
  if(String(awayId)===String(homeId))return null;
- const history=gamesFromTeams(teams).filter(e=>!asOf||e.home.date.slice(0,10)<asOf.slice(0,10));
+ const history=gamesFromTeams(teams).filter(e=>!asOf||Date.parse(e.home.date)<Date.parse(asOf));
  const periods={};for(const field of ['q1','firstHalf','fullGame'])periods[field]=estimate(history,awayId,homeId,field);
  const p=periods.fullGame;if(!p)return null;
- const eligibleRoster=roster.map(p=>({...p,gameLogs:(p.gameLogs||[]).filter(g=>!asOf||g.date.slice(0,10)<asOf.slice(0,10)),availability:asOf&&asOf.slice(0,10)<new Date().toISOString().slice(0,10)?{status:'Unknown'}:p.availability}));
+ const eligibleRoster=roster.map(p=>({...p,gameLogs:(p.gameLogs||[]).filter(g=>!asOf||Date.parse(g.date)<Date.parse(asOf)),availability:asOf&&((p.availability?.checkedAt&&Date.parse(p.availability.checkedAt)>Date.parse(asOf))||asOf.slice(0,10)<new Date().toISOString().slice(0,10))?{status:'Unknown'}:p.availability}));
+ const report=officialReport;
+ if(report && asOf && Date.parse(report.reportedAt)<=Date.parse(asOf)){
+  const date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(asOf));
+  const normalize=v=>String(v).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  for(const player of eligibleRoster){const team=teams.find(t=>String(t.teamId)===String(player.currentTeamId));const submission=report.teams?.find(r=>r.gameDate===date&&r.team===team?.team);if(submission?.status==='not submitted')player.availability={status:'Unknown',source:report.source,reportedAt:report.reportedAt};const entries=report.entries.filter(r=>r.gameDate===date&&r.team===team?.team&&normalize(r.name)===normalize(player.name));if(entries.length===1)player.availability={status:entries[0].status,reportedAt:report.reportedAt,source:report.source};}
+ }
  const a=rotation(eligibleRoster.filter(x=>String(x.currentTeamId)===String(awayId)),awayId),h=rotation(eligibleRoster.filter(x=>String(x.currentTeamId)===String(homeId)),homeId);
- const adjusted=a.complete&&h.complete&&a.adjustment!==null&&h.adjustment!==null;
+ const adjusted=false; // Player adjustments require held-out validation before activation.
  const away=p.away+(adjusted?a.adjustment:0),home=p.home+(adjusted?h.adjustment:0),margin=home-away;
  const residuals=model?.residuals||[];
- return {away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
+ return {awayCandidate:rotationV2(eligibleRoster.filter(x=>String(x.currentTeamId)===String(awayId)),awayId),homeCandidate:rotationV2(eligibleRoster.filter(x=>String(x.currentTeamId)===String(homeId)),homeId),away,home,margin,total:away+home,homeProbability:cdf(margin,residuals),awayProbability:residuals.length?1-cdf(margin,residuals):null,baselineHomeProbability:cdf(p.margin,residuals),periods,awayRotation:a,homeRotation:h,adjusted,awayGames:p.awayGames,homeGames:p.homeGames,status:'EXPERIMENTAL',limitations:['Box-score defensive activity is descriptive, not isolated defensive value.','Usage is a reconstructed box-score estimate, not tracking-based touches or an official feed value.','Availability/minutes adjustments are scenarios and have not been validated historically.']};
 }
-const api={n,mean,freeThrowsSummary,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
+const api={allocateMinutes,rotationV2,n,mean,freeThrowsSummary,usageGame,usageSummary,connectUsage,per36,impact,rotation,gamesFromTeams,estimate,fit,cdf,predict};if(typeof module!=='undefined')module.exports=api;root.NBAImpact=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
