@@ -1,0 +1,127 @@
+{
+  "team": "Philadelphia 76ers",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Jaylen Brown",
+      "jersey": 7,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 101
+    },
+    {
+      "name": "Jabari Walker",
+      "jersey": 33,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 107
+    },
+    {
+      "name": "Adem Bona",
+      "jersey": 30,
+      "position": "Center",
+      "height": "6'10\"",
+      "weight_kg": 106
+    },
+    {
+      "name": "Kentavious Caldwell-Pope",
+      "jersey": 1,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Joel Embiid",
+      "jersey": 21,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 122
+    },
+    {
+      "name": "Dean Wade",
+      "jersey": 45,
+      "position": "Power forward",
+      "height": "6'9\"",
+      "weight_kg": 103
+    },
+    {
+      "name": "Caleb Love",
+      "jersey": 8,
+      "position": "Shooting guard",
+      "height": "6'3\"",
+      "weight_kg": 96
+    },
+    {
+      "name": "Labaron Philon Jr.",
+      "jersey": "00",
+      "position": "Point guard",
+      "height": "6'3\"",
+      "weight_kg": 80
+    },
+    {
+      "name": "Ariel Hukporti",
+      "jersey": 55,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "Tyrese Maxey",
+      "jersey": 0,
+      "position": "Point guard",
+      "height": "6'2\"",
+      "weight_kg": 90
+    },
+    {
+      "name": "Anfernee Simons",
+      "jersey": 5,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 90
+    },
+    {
+      "name": "Dominick Barlow",
+      "jersey": 25,
+      "position": "Small forward",
+      "height": "6'9\"",
+      "weight_kg": 101
+    },
+    {
+      "name": "Justin Edwards",
+      "jersey": 11,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 98
+    },
+    {
+      "name": "Tacko Fall",
+      "jersey": 99,
+      "position": "Center",
+      "height": "7'6\"",
+      "weight_kg": 141
+    },
+    {
+      "name": "VJ Edgecombe",
+      "jersey": 77,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "LeBron James",
+      "jersey": 23,
+      "position": "Small forward",
+      "height": "6'9\"",
+      "weight_kg": 113
+    },
+    {
+      "name": "Rayan Rupert",
+      "jersey": 12,
+      "position": "Shooting guard",
+      "height": "6'7\"",
+      "weight_kg": 92
+    }
+  ]
+}
