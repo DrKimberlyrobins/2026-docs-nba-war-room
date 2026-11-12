@@ -1,0 +1,134 @@
+{
+  "team": "Detroit Pistons",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Isaac Jones",
+      "jersey": 13,
+      "position": "Power forward",
+      "height": "6'8\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "Ugonna Onyenso",
+      "jersey": 34,
+      "position": "Center",
+      "height": "6'11\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Paul Reed",
+      "jersey": 7,
+      "position": "Center",
+      "height": "6'9\"",
+      "weight_kg": 95
+    },
+    {
+      "name": "Chaz Lanier",
+      "jersey": 8,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 93
+    },
+    {
+      "name": "Ronald Holland II",
+      "jersey": 5,
+      "position": "Small forward",
+      "height": "6'8\"",
+      "weight_kg": 93
+    },
+    {
+      "name": "Ebuka Okorie",
+      "jersey": 23,
+      "position": "Point guard",
+      "height": "6'2\"",
+      "weight_kg": 83
+    },
+    {
+      "name": "Kevin Huerter",
+      "jersey": 27,
+      "position": "Shooting guard",
+      "height": "6'6\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Daniss Jenkins",
+      "jersey": 24,
+      "position": "Point guard",
+      "height": "6'4\"",
+      "weight_kg": 74
+    },
+    {
+      "name": "Cade Cunningham",
+      "jersey": 2,
+      "position": "Point guard",
+      "height": "6'6\"",
+      "weight_kg": 99
+    },
+    {
+      "name": "Elijah Harkless",
+      "jersey": 94,
+      "position": "Shooting guard",
+      "height": "6'3\"",
+      "weight_kg": 88
+    },
+    {
+      "name": "Tolu Smith",
+      "jersey": 35,
+      "position": "Power forward",
+      "height": "6'11\"",
+      "weight_kg": 115
+    },
+    {
+      "name": "Taurean Prince",
+      "jersey": 12,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 99
+    },
+    {
+      "name": "Isaiah Joe",
+      "jersey": 17,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 74
+    },
+    {
+      "name": "John Collins",
+      "jersey": 20,
+      "position": "Power forward",
+      "height": "6'9\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Javonte Green",
+      "jersey": 31,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Duncan Robinson",
+      "jersey": 55,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 97
+    },
+    {
+      "name": "Ausar Thompson",
+      "jersey": 9,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Jalen Duren",
+      "jersey": 0,
+      "position": "Center",
+      "height": "6'10\"",
+      "weight_kg": 113
+    }
+  ]
+}
