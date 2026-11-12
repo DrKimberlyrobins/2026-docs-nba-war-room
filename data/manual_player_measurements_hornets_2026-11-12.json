@@ -1,0 +1,134 @@
+{
+  "team": "Charlotte Hornets",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Grayson Allen",
+      "jersey": 8,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 98
+    },
+    {
+      "name": "Sion James",
+      "jersey": 4,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Liam McNeeley",
+      "jersey": 33,
+      "position": "Small forward",
+      "height": "6'8\"",
+      "weight_kg": 101
+    },
+    {
+      "name": "Hannes Steinbach",
+      "jersey": 22,
+      "position": "Power forward",
+      "height": "6'10\"",
+      "weight_kg": 112
+    },
+    {
+      "name": "PJ Hall",
+      "jersey": 16,
+      "position": "Center",
+      "height": "6'9\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "Dennis Schröder",
+      "jersey": 17,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 79
+    },
+    {
+      "name": "Coby White",
+      "jersey": 3,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 93
+    },
+    {
+      "name": "Kylan Boswell",
+      "jersey": 18,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Naz Reid",
+      "jersey": 0,
+      "position": "Center",
+      "height": "6'9\"",
+      "weight_kg": 109
+    },
+    {
+      "name": "Moussa Diabaté",
+      "jersey": 14,
+      "position": "Center",
+      "height": "6'10\"",
+      "weight_kg": 104
+    },
+    {
+      "name": "Brandon Miller",
+      "jersey": 24,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 95
+    },
+    {
+      "name": "Christian Anderson",
+      "jersey": 5,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 81
+    },
+    {
+      "name": "Michael Ajayi",
+      "jersey": 10,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "Grant Williams",
+      "jersey": 2,
+      "position": "Power forward",
+      "height": "6'7\"",
+      "weight_kg": 107
+    },
+    {
+      "name": "Tidjane Salaün",
+      "jersey": 31,
+      "position": "Power forward",
+      "height": "6'10\"",
+      "weight_kg": 104
+    },
+    {
+      "name": "Ryan Kalkbrenner",
+      "jersey": 11,
+      "position": "Center",
+      "height": "7'1\"",
+      "weight_kg": 122
+    },
+    {
+      "name": "Royce O'Neale",
+      "jersey": "00",
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 99
+    },
+    {
+      "name": "Kon Knueppel",
+      "jersey": 7,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 104
+    }
+  ]
+}
