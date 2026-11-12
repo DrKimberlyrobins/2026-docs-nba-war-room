@@ -1,0 +1,134 @@
+{
+  "team": "Washington Wizards",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Alex Sarr",
+      "jersey": 20,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Anthony Davis",
+      "jersey": 23,
+      "position": "Power forward",
+      "height": "6'10\"",
+      "weight_kg": 114
+    },
+    {
+      "name": "Trae Young",
+      "jersey": 3,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 74
+    },
+    {
+      "name": "Reece Beekman",
+      "jersey": 26,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Jamir Watkins",
+      "jersey": 5,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 95
+    },
+    {
+      "name": "AJ Dybantsa",
+      "jersey": 4,
+      "position": "Small forward",
+      "height": "6'9\"",
+      "weight_kg": 95
+    },
+    {
+      "name": "Deandre Ayton",
+      "jersey": 8,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 114
+    },
+    {
+      "name": "Anthony Gill",
+      "jersey": 16,
+      "position": "Power forward",
+      "height": "6'8\"",
+      "weight_kg": 104
+    },
+    {
+      "name": "Tristan Vukcevic",
+      "jersey": "00",
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 99
+    },
+    {
+      "name": "Justin Champagnie",
+      "jersey": 9,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 93
+    },
+    {
+      "name": "Felix Okpara",
+      "jersey": 34,
+      "position": "Center",
+      "height": "6'11\"",
+      "weight_kg": 106
+    },
+    {
+      "name": "Tre Mann",
+      "jersey": 1,
+      "position": "Point guard",
+      "height": "6'4\"",
+      "weight_kg": 80
+    },
+    {
+      "name": "Will Riley",
+      "jersey": 27,
+      "position": "Small forward",
+      "height": "6'9\"",
+      "weight_kg": 81
+    },
+    {
+      "name": "Khris Middleton",
+      "jersey": 22,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 100
+    },
+    {
+      "name": "Bub Carrington",
+      "jersey": 7,
+      "position": "Point guard",
+      "height": "6'4\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Bilal Coulibaly",
+      "jersey": 0,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 88
+    },
+    {
+      "name": "Tre Johnson",
+      "jersey": 12,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Kyshawn George",
+      "jersey": 18,
+      "position": "Shooting guard",
+      "height": "6'8\"",
+      "weight_kg": 90
+    }
+  ]
+}
