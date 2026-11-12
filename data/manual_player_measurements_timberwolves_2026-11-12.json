@@ -1,0 +1,120 @@
+{
+  "team": "Minnesota Timberwolves",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Ayo Dosunmu",
+      "jersey": 13,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 91
+    },
+    {
+      "name": "Cody Williams",
+      "jersey": 9,
+      "position": "Shooting guard",
+      "height": "6'7\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Anthony Edwards",
+      "jersey": 5,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "LaMelo Ball",
+      "jersey": 1,
+      "position": "Point guard",
+      "height": "6'7\"",
+      "weight_kg": 81
+    },
+    {
+      "name": "Jonathan Kuminga",
+      "jersey": 24,
+      "position": "Power forward",
+      "height": "6'7\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Jaden McDaniels",
+      "jersey": 3,
+      "position": "Power forward",
+      "height": "6'9\"",
+      "weight_kg": 83
+    },
+    {
+      "name": "Jaylen Clark",
+      "jersey": 7,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Isaiah Evans",
+      "jersey": 33,
+      "position": "Shooting guard",
+      "height": "6'6\"",
+      "weight_kg": 79
+    },
+    {
+      "name": "Donte DiVincenzo",
+      "jersey": 0,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Bones Hyland",
+      "jersey": 8,
+      "position": "Point guard",
+      "height": "6'2\"",
+      "weight_kg": 76
+    },
+    {
+      "name": "Rocco Zikarsky",
+      "jersey": 44,
+      "position": "Center",
+      "height": "7'3\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Trey Lyles",
+      "jersey": 41,
+      "position": "Power forward",
+      "height": "6'9\"",
+      "weight_kg": 106
+    },
+    {
+      "name": "Rudy Gobert",
+      "jersey": 27,
+      "position": "Center",
+      "height": "7'1\"",
+      "weight_kg": 117
+    },
+    {
+      "name": "Terrence Shannon Jr.",
+      "jersey": 4,
+      "position": "Shooting guard",
+      "height": "6'6\"",
+      "weight_kg": 97
+    },
+    {
+      "name": "Joan Beringer",
+      "jersey": 19,
+      "position": "Power forward",
+      "height": "7'0\"",
+      "weight_kg": 104
+    },
+    {
+      "name": "Zyon Pullin",
+      "jersey": 15,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 93
+    }
+  ]
+}
