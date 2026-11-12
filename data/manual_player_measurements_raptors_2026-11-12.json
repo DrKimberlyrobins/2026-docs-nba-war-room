@@ -1,0 +1,127 @@
+{
+  "team": "Toronto Raptors",
+  "source": "User-provided roster screenshots",
+  "captured_date": "2026-11-12",
+  "weight_unit": "kg",
+  "players": [
+    {
+      "name": "Jakob Poeltl",
+      "jersey": 19,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 114
+    },
+    {
+      "name": "Malachi Smith",
+      "jersey": 18,
+      "position": "Shooting guard",
+      "height": "6'4\"",
+      "weight_kg": 92
+    },
+    {
+      "name": "Jaden Bradley",
+      "jersey": 8,
+      "position": "Point guard",
+      "height": "6'3\"",
+      "weight_kg": 90
+    },
+    {
+      "name": "Immanuel Quickley",
+      "jersey": 5,
+      "position": "Point guard",
+      "height": "6'3\"",
+      "weight_kg": 86
+    },
+    {
+      "name": "Jamal Shead",
+      "jersey": 1,
+      "position": "Point guard",
+      "height": "6'1\"",
+      "weight_kg": 90
+    },
+    {
+      "name": "Alijah Martin",
+      "jersey": 55,
+      "position": "Shooting guard",
+      "height": "6'2\"",
+      "weight_kg": 95
+    },
+    {
+      "name": "Kawhi Leonard",
+      "jersey": 2,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Jamison Battle",
+      "jersey": 77,
+      "position": "Small forward",
+      "height": "6'7\"",
+      "weight_kg": 99
+    },
+    {
+      "name": "Trayce Jackson-Davis",
+      "jersey": 32,
+      "position": "Center",
+      "height": "6'9\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "Collin Murray-Boyles",
+      "jersey": 30,
+      "position": "Power forward",
+      "height": "6'7\"",
+      "weight_kg": 111
+    },
+    {
+      "name": "RJ Barrett",
+      "jersey": 9,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 97
+    },
+    {
+      "name": "Ja'Kobe Walter",
+      "jersey": 14,
+      "position": "Shooting guard",
+      "height": "6'5\"",
+      "weight_kg": 81
+    },
+    {
+      "name": "Allen Graves",
+      "jersey": 22,
+      "position": "Power forward",
+      "height": "6'8\"",
+      "weight_kg": 102
+    },
+    {
+      "name": "Nate Bittle",
+      "jersey": 12,
+      "position": "Center",
+      "height": "7'0\"",
+      "weight_kg": 97
+    },
+    {
+      "name": "Kyle Anderson",
+      "jersey": 13,
+      "position": "Small forward",
+      "height": "6'8\"",
+      "weight_kg": 104
+    },
+    {
+      "name": "Scottie Barnes",
+      "jersey": 4,
+      "position": "Power forward",
+      "height": "6'8\"",
+      "weight_kg": 107
+    },
+    {
+      "name": "Kevin McCullar Jr.",
+      "jersey": 11,
+      "position": "Small forward",
+      "height": "6'6\"",
+      "weight_kg": 95
+    }
+  ]
+}
