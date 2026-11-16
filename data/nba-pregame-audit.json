@@ -1,0 +1,47 @@
+{
+  "games": 21,
+  "method": "Expanding history; minimum two prior team games; unavailable historical injuries remain Unknown; current roster membership limits historical reconstruction",
+  "accuracyPromotionApproved": false,
+  "metrics": {
+    "original:minutes": {
+      "n": 543,
+      "mae": 6.039397853087514,
+      "bias": 0.3738489871086553
+    },
+    "original:points": {
+      "n": 433,
+      "mae": 4.887432712071679,
+      "bias": -0.6199381860008578
+    },
+    "original:rebounds": {
+      "n": 446,
+      "mae": 2.309229331753034,
+      "bias": -0.36080552169905455
+    },
+    "original:assists": {
+      "n": 446,
+      "mae": 1.4074020677879342,
+      "bias": -0.20948990204032733
+    },
+    "candidate:minutes": {
+      "n": 543,
+      "mae": 6.039397853087514,
+      "bias": 0.3738489871086553
+    },
+    "candidate:points": {
+      "n": 433,
+      "mae": 4.887432712071679,
+      "bias": -0.6199381860008579
+    },
+    "candidate:rebounds": {
+      "n": 446,
+      "mae": 2.309229331753034,
+      "bias": -0.36080552169905455
+    },
+    "candidate:assists": {
+      "n": 446,
+      "mae": 1.4074020677879342,
+      "bias": -0.20948990204032733
+    }
+  }
+}

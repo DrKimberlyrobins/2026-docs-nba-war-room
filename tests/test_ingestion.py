@@ -13,3 +13,19 @@ class IngestionTests(unittest.TestCase):
         for pair in ['9-8','--','x-y','-1-2']:
             with self.assertRaises(ValueError):r.parse_stats(['FG'],[pair])
 if __name__=='__main__':unittest.main()
+
+class InjuryTests(unittest.TestCase):
+    def test_missing_id_matches_name_and_team(self):
+        from injury_sources import espn_index
+        payload={'injuries':[{'id':'1','injuries':[{'athlete':{'displayName':'José Test'},'status':'Out'}]}]}
+        matched,unmatched=espn_index(payload,[({'teamId':'1'},{'athletes':[{'id':'42','displayName':'Jose Test'}]})])
+        self.assertEqual(matched['42']['status'],'Out');self.assertEqual(unmatched,[])
+    def test_ambiguous_name_stays_unmatched(self):
+        from injury_sources import espn_index
+        payload={'injuries':[{'id':'1','injuries':[{'athlete':{'displayName':'Test'},'status':'Out'}]}]}
+        matched,unmatched=espn_index(payload,[])
+        self.assertEqual(matched,{});self.assertEqual(len(unmatched),1)
+    def test_url_id_without_athlete_id(self):
+        from injury_sources import espn_index
+        matched,_=espn_index({'injuries':[{'injuries':[{'athlete':{'links':[{'href':'https://espn.com/nba/player/_/id/42/test'}]},'status':'Out'}]}]},[])
+        self.assertIn('42',matched)
