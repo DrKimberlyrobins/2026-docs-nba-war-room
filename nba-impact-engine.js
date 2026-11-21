@@ -64,7 +64,7 @@ function rotation(roster,teamId){
  const baseline=rows.reduce((s,p)=>s+240*p.baseMinutes/baseTotal*p.pointsPerMinute,0);
  let projected=0;
  for(const p of rows){p.projectedMinutes=active.includes(p)?240*p.targetMinutes/total:0;p.projectedPoints=p.projectedMinutes*p.pointsPerMinute;projected+=p.projectedPoints;}
- return {rows,adjustment:projected-baseline,baselinePoints:baseline,projectedPoints:projected,complete:rows.every(p=>p.status!=='Unknown'),uncertain:rows.filter(p=>/questionable|doubtful|day.to.day/i.test(p.status)).map(p=>p.name)};
+ return {rows,adjustment:projected-baseline,baselinePoints:baseline,projectedPoints:projected,complete:rows.every(p=>!['Unknown','Unverified'].includes(p.status)),uncertain:rows.filter(p=>/questionable|doubtful|day.to.day/i.test(p.status)).map(p=>p.name)};
 }
 function gamesFromTeams(teams){
  const map=new Map();for(const t of teams)for(const g of t.gameLogs||[]){if(n(g.fullGame)===null)continue;const e=map.get(String(g.eventId))||{};e[g.homeAway]=g;map.set(String(g.eventId),e);}
@@ -99,7 +99,9 @@ function predict(teams,roster,awayId,homeId,model,asOf){
  const history=gamesFromTeams(teams).filter(e=>!asOf||e.home.date.slice(0,10)<asOf.slice(0,10));
  const periods={};for(const field of ['q1','firstHalf','fullGame'])periods[field]=estimate(history,awayId,homeId,field);
  const p=periods.fullGame;if(!p)return null;
- const eligibleRoster=roster.map(p=>({...p,gameLogs:(p.gameLogs||[]).filter(g=>!asOf||g.date.slice(0,10)<asOf.slice(0,10)),availability:asOf&&asOf.slice(0,10)<new Date().toISOString().slice(0,10)?{status:'Unknown'}:p.availability}));
+ const localDate=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+ const today=localDate(Date.now()),gameDay=asOf?localDate(asOf):today;
+ const eligibleRoster=roster.map(p=>({...p,gameLogs:(p.gameLogs||[]).filter(g=>!asOf||g.date.slice(0,10)<asOf.slice(0,10)),availability:gameDay<today||(p.availability?.gameDay&&p.availability.gameDay!==gameDay)?{status:'Unknown'}:p.availability}));
  const a=rotation(eligibleRoster.filter(x=>String(x.currentTeamId)===String(awayId)),awayId),h=rotation(eligibleRoster.filter(x=>String(x.currentTeamId)===String(homeId)),homeId);
  const adjusted=a.complete&&h.complete&&a.adjustment!==null&&h.adjustment!==null;
  const away=p.away+(adjusted?a.adjustment:0),home=p.home+(adjusted?h.adjustment:0),margin=home-away;

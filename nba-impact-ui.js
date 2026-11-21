@@ -1,10 +1,11 @@
 'use strict';
-const NBAView={model:null,current:null,mode:'current',error:null};
+const NBAView={model:null,current:null,depth:null,mode:'current',error:null};
 async function nbaPrepare(){
  const read=async path=>{const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error(path+': HTTP '+r.status);return r.json();};
- const results=await Promise.allSettled([read('./data/nba-current.json'),read('./data/nba-probability-model.json')]);
+ const results=await Promise.allSettled([read('./data/nba-current.json'),read('./data/nba-probability-model.json'),read('./data/nba-depth.json')]);
  if(results[0].status==='fulfilled')NBAView.current=results[0].value;else NBAView.error=String(results[0].reason);
  if(results[1].status==='fulfilled')NBAView.model=results[1].value;
+ if(results[2].status==='fulfilled')NBAView.depth=results[2].value;
 }
 function nbaSourceControls(){
  let host=document.getElementById('nbaSourceControls');
@@ -14,22 +15,50 @@ function nbaSourceControls(){
  host.querySelector('select').onchange=e=>{NBAView.mode=e.target.value;loadEngine();};
  document.getElementById('nbaSourceDescription').textContent='Active season: '+status.season+' · Refreshed '+status.generatedAt+' · '+status.gamesProcessed+' reconciled games. ESPN source checks confirm internal box-score totals; model validation is reported separately.'+(NBAView.error?' Current snapshot error: '+NBAView.error:'');
 }
+const nbaCentralDate=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+const nbaReportTime=value=>new Date(value).toLocaleString('en-US',{timeZone:'America/Chicago',dateStyle:'short',timeStyle:'short'})+' CT';
+const nbaNameKey=name=>name.normalize('NFD').toLowerCase().replace(/[^a-z0-9]/g,'');
+function nbaAvailability(teamReport,name){
+ return teamReport?.players[nbaNameKey(name)]||(teamReport?.submitted?{status:'Not listed'}:null);
+}
+function nbaDepthPanel(team,report){
+ const chart=NBAView.depth?.charts[String(team.teamId)];
+ const teamReport=report?.teams[String(team.teamId)];
+ const reportLink=teamReport?'<a href="'+safe(report.source)+'" target="_blank" rel="noopener">NBA injury report</a> · '+safe(nbaReportTime(report.publishedAt)):'No game-day report captured for this matchup';
+ const intro='<h4>'+safe(team.team)+' depth chart</h4><p class="small">'+reportLink+(teamReport&&!teamReport.submitted?' · team report pending':'')+'</p>';
+ if(!chart)return intro+'<p>ESPN depth order is unavailable.</p>';
+ const rows=Object.entries(chart.positions).map(([position,players])=>'<tr><th scope="row">'+safe(position)+'</th><td>'+players.map((player,index)=>{
+  const entry=nbaAvailability(teamReport,player.name);
+  const status=entry?.status||'Report unavailable';
+  return '<div><strong>'+String(index+1)+'. '+safe(player.name)+'</strong> · '+safe(status)+(entry?.reason?' <small>'+safe(entry.reason)+'</small>':'')+'</div>';
+ }).join('')+'</td></tr>').join('');
+ return intro+'<p class="small"><a href="'+safe(chart.source)+'" target="_blank" rel="noopener">ESPN depth order</a> · checked '+safe(nbaReportTime(chart.checkedAt))+'</p><div class="scroll"><table><thead><tr><th>Position</th><th>Depth order and game-day status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 function nbaRenderProbability(away,home){
  const host=document.getElementById('teamResults');
  host.querySelector('#nbaImpactProjection')?.remove();
  const box=document.createElement('section');box.id='nbaImpactProjection';box.className='panel';host.prepend(box);
  if(NBAView.mode!=='current'||!NBAView.current){box.innerHTML='<h3>Team Probability Engine</h3><p>Select the current season to connect current rosters and availability. Historical tables remain available below.</p>';return;}
+ const today=nbaCentralDate(Date.now());
  const selected=window.nbaSelectedGame;
- const asOf=selected&&String(selected.awayId)===String(away.teamId)&&String(selected.homeId)===String(home.teamId)?selected.date:new Date().toISOString();
+ const matches=selected&&String(selected.awayId)===String(away.teamId)&&String(selected.homeId)===String(home.teamId);
+ const reports=NBAView.depth?.reports||{};
+ const report=matches?reports[String(selected.id)]:Object.values(reports).find(r=>r.date===today&&r.teams[String(away.teamId)]&&r.teams[String(home.teamId)]);
+ const asOf=matches?selected.date:report?.tip||new Date().toISOString();
  const fresh=Date.now()-Date.parse(status.generatedAt)<=36*3600000;
- const roster=fresh?players:players.map(p=>({...p,availability:{status:'Unknown'}}));
+ const roster=players.map(player=>{
+  const entry=nbaAvailability(report?.teams[String(player.currentTeamId)],player.name);
+  if(entry&&report.date===today&&Date.parse(report.publishedAt)<=Date.parse(asOf))return {...player,availability:{...entry,gameDay:report.date}};
+  return fresh&&!report?player:{...player,availability:{status:'Unknown'}};
+ });
+ const depth='<h3>Depth chart and game-day availability</h3><p class="small">Depth order shows positional starters and backups. “Not listed” means the player did not appear on the submitted injury report. Starting lineups require separate confirmation.</p>'+nbaDepthPanel(away,report)+nbaDepthPanel(home,report);
  const p=NBAImpact.predict(teams,roster,away.teamId,home.teamId,NBAView.model,asOf);
- if(!p){box.innerHTML='<h3>Team Probability Engine</h3><p>Insufficient completed current-season games for both teams before this matchup. No probability is substituted.</p>';return;}
+ if(!p){box.innerHTML=depth+'<p>Insufficient completed current-season games for a matchup projection.</p>';return;}
  const fmt=v=>v===null||!Number.isFinite(v)?'—':v.toFixed(1),pct=v=>v===null?'—':(100*v).toFixed(1)+'%';
  const stale=Date.now()-Date.parse(status.generatedAt)>36*3600000;
  const v=NBAView.model?.validation;
  const table=(team,rotation,opponent)=>'<h4>'+safe(team.team)+'</h4><div class="scroll nba-impact-scroll" role="region" tabindex="0" aria-label="'+safe(team.team)+' player impact"><table><thead><tr><th>Player</th><th>Availability</th><th>Games</th><th>Min/game</th><th>Scenario minutes</th><th>Scenario points</th><th>FG%</th><th>eFG%</th><th>Usage % (est.)</th><th>FTA/game</th><th>Shots/36</th><th>AST/36</th><th>REB/36</th><th>TO/36</th><th>Def. activity/36</th><th>On-court net/36</th></tr></thead><tbody>'+rotation.rows.sort((a,b)=>(b.projectedPoints||0)-(a.projectedPoints||0)).map(r=>'<tr><td><button data-player="'+safe(r.playerId)+'">'+safe(r.name)+'</button></td><td>'+safe(r.status)+'</td><td>'+r.games+'</td><td>'+fmt(r.minutes)+'</td><td>'+fmt(r.projectedMinutes)+'</td><td>'+fmt(r.projectedPoints)+'</td><td>'+fmt(r.fgPct)+'</td><td>'+fmt(r.effectiveFgPct)+'</td><td>'+fmt(r.estimatedUsagePct)+'</td><td>'+fmt(r.freeThrowsAttempted)+'</td><td>'+fmt(r.shotAttemptsPer36)+'</td><td>'+fmt(r.assistsPer36)+'</td><td>'+fmt(r.reboundsPer36)+'</td><td>'+fmt(r.turnoversPer36)+'</td><td>'+fmt(r.defensiveEventsPer36)+'</td><td>'+fmt(r.netPointsPer36)+'</td></tr>').join('')+'</tbody></table></div>';
- box.innerHTML='<h2>Player Impact → Team Probability</h2><p class="small">'+safe(status.season)+' · ESPN box scores + roster + injury report · '+safe(status.generatedAt)+'</p>'+(stale?'<div class="notice">STALE SNAPSHOT — refresh is more than 36 hours old. Availability scenarios require a new report.</div>':'')+'<div class="grid">'+statCard(away.team+' win',pct(p.awayProbability),'Experimental model estimate')+statCard(home.team+' win',pct(p.homeProbability),'Experimental model estimate')+statCard('Projected score',fmt(p.away)+' – '+fmt(p.home),'Away – Home · includes overtime in full-game data')+statCard('Projected total',fmt(p.total),'No market price used')+'</div><p>Baseline home probability: '+pct(p.baselineHomeProbability)+'. Player scenario changes scoring by '+fmt(p.awayRotation.adjustment)+' away / '+fmt(p.homeRotation.adjustment)+' home points. '+(p.adjusted?'Scenario connected.':'Player scenario unavailable; baseline only.')+' Samples: '+p.awayGames+' away-team and '+p.homeGames+' home-team games.</p><details><summary>Calculation and validation</summary><p>Team offense and opponent points allowed are shrunk toward league scoring with ten prior games. Home advantage comes from historical home scoring margins. Last-five minutes and points per minute allocate 240 regulation player-minutes; players reported Out are excluded and remaining minutes redistributed. This scoring difference adjusts the baseline. Questionable / day-to-day players remain in the scenario: '+safe([...p.awayRotation.uncertain,...p.homeRotation.uncertain].join(', ')||'none listed')+'. Injuries are reports, not confirmed lineups.</p><p>Win probability is the empirical margin-residual distribution learned from 2025–26 games. '+(v?'Held-out: '+v.games+' games; Brier '+v.brier.toFixed(4)+' (coin-flip .2500); margin MAE '+v.marginMAE.toFixed(2)+' points. '+safe(v.method):'Validation file unavailable.')+'. Historical source remains provisional. Probability calibration, sportsbook comparison and player adjustments have not passed independent validation.</p><p>Defensive activity = (steals + blocks + defensive rebounds) per 36 minutes. On-court net uses plus/minus and includes teammates and opponents. These are descriptive measures; individual causal defense is unavailable. Usage is estimated from matched player and reconstructed team box scores; assists and rebounds are shown separately because usage measures possession endings, not all activity. Team points allowed feeds the defensive matchup calculation.</p></details><h3>Period scoring baseline</h3><div class="grid">'+['q1','firstHalf','fullGame'].map(k=>statCard({q1:'1Q',firstHalf:'1H',fullGame:'Full game'}[k],p.periods[k]?fmt(p.periods[k].away)+' – '+fmt(p.periods[k].home):'—','Away – Home; player scenario applies to full game only')).join('')+'</div>'+table(away,p.awayRotation,home)+table(home,p.homeRotation,away)+'<p class="small">Scenario points are scoring allocations, not independently validated player prop projections. FTA/game shows recorded free-throw attempts per appearance; the player popout includes makes, accuracy and share of scoring. Market qualification remains PASS until current prices and validated model edges are connected.</p>';
+ box.innerHTML='<h2>Player Impact → Team Probability</h2><p class="small">'+safe(status.season)+' · ESPN box scores + roster + injury report · '+safe(status.generatedAt)+'</p>'+(stale?'<div class="notice">Box-score snapshot is more than 36 hours old. Check the injury report timestamp below for game-day availability.</div>':'')+'<div class="grid">'+statCard(away.team+' win',pct(p.awayProbability),'Experimental model estimate')+statCard(home.team+' win',pct(p.homeProbability),'Experimental model estimate')+statCard('Projected score',fmt(p.away)+' – '+fmt(p.home),'Away – Home · includes overtime in full-game data')+statCard('Projected total',fmt(p.total),'No market price used')+'</div><p>Baseline home probability: '+pct(p.baselineHomeProbability)+'. Player scenario changes scoring by '+fmt(p.awayRotation.adjustment)+' away / '+fmt(p.homeRotation.adjustment)+' home points. '+(p.adjusted?'Scenario connected.':'Player scenario unavailable; baseline only.')+' Samples: '+p.awayGames+' away-team and '+p.homeGames+' home-team games.</p><details><summary>Calculation and validation</summary><p>Team offense and opponent points allowed are shrunk toward league scoring with ten prior games. Home advantage comes from historical home scoring margins. Last-five minutes and points per minute allocate 240 regulation player-minutes; players reported Out are excluded and remaining minutes redistributed. This scoring difference adjusts the baseline. Questionable / day-to-day players remain in the scenario: '+safe([...p.awayRotation.uncertain,...p.homeRotation.uncertain].join(', ')||'none listed')+'. Injuries are reports, not confirmed lineups.</p><p>Win probability is the empirical margin-residual distribution learned from 2025–26 games. '+(v?'Held-out: '+v.games+' games; Brier '+v.brier.toFixed(4)+' (coin-flip .2500); margin MAE '+v.marginMAE.toFixed(2)+' points. '+safe(v.method):'Validation file unavailable.')+'. Historical source remains provisional. Probability calibration, sportsbook comparison and player adjustments have not passed independent validation.</p><p>Defensive activity = (steals + blocks + defensive rebounds) per 36 minutes. On-court net uses plus/minus and includes teammates and opponents. These are descriptive measures; individual causal defense is unavailable. Usage is estimated from matched player and reconstructed team box scores; assists and rebounds are shown separately because usage measures possession endings, not all activity. Team points allowed feeds the defensive matchup calculation.</p></details><h3>Period scoring baseline</h3><div class="grid">'+['q1','firstHalf','fullGame'].map(k=>statCard({q1:'1Q',firstHalf:'1H',fullGame:'Full game'}[k],p.periods[k]?fmt(p.periods[k].away)+' – '+fmt(p.periods[k].home):'—','Away – Home; player scenario applies to full game only')).join('')+'</div>'+depth+table(away,p.awayRotation,home)+table(home,p.homeRotation,away)+'<p class="small">Scenario points are scoring allocations, not independently validated player prop projections. FTA/game shows recorded free-throw attempts per appearance; the player popout includes makes, accuracy and share of scoring. Market qualification remains PASS until current prices and validated model edges are connected.</p>';
  box.querySelectorAll('[data-player]').forEach(b=>b.onclick=()=>openPlayer(b.dataset.player));
 }
 function nbaPlayerImpact(player){
@@ -64,5 +93,25 @@ NBAView.refreshCurrent=async function(){
  }catch(error){console.warn('Current snapshot refresh deferred: '+error.message);}
  finally{NBAView.refreshing=false;}
 };
-setInterval(()=>{if(document.visibilityState!=='hidden')NBAView.refreshCurrent();},60000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')NBAView.refreshCurrent();});
+async function nbaRefreshDepth(){
+ if(NBAView.mode!=='current'||!NBAView.prepared||NBAView.depthRefreshing)return;
+ NBAView.depthRefreshing=true;
+ try{
+  const response=await fetch('./data/nba-depth.json',{cache:'no-cache'});
+  if(!response.ok)return;
+  const depth=await response.json();
+  if(JSON.stringify(depth)===JSON.stringify(NBAView.depth))return;
+  NBAView.depth=depth;
+  const away=teams.find(t=>String(t.teamId)===document.getElementById('awayTeam').value);
+  const home=teams.find(t=>String(t.teamId)===document.getElementById('homeTeam').value);
+  if(away&&home&&document.getElementById('nbaImpactProjection'))nbaRenderProbability(away,home);
+ }catch(error){console.warn('Depth refresh deferred: '+error.message);}
+ finally{NBAView.depthRefreshing=false;}
+}
+function nbaRefreshVisible(){
+ if(document.visibilityState==='hidden')return;
+ NBAView.refreshCurrent();
+ nbaRefreshDepth();
+}
+setInterval(nbaRefreshVisible,60000);
+document.addEventListener('visibilitychange',nbaRefreshVisible);

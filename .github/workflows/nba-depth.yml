@@ -1,0 +1,33 @@
+name: NBA Depth and Availability
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: nba-depth-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pdfplumber==0.11.8
+      - run: python3 scripts/refresh_depth.py
+      - name: Publish depth charts and game-day reports
+        run: |
+          git config user.name 'NBA War Room data engine'
+          git config user.email 'nba-engine@users.noreply.github.com'
+          git add data/nba-depth.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh NBA depth and availability'
+            for attempt in 1 2 3; do
+              git pull --rebase origin main && git push origin HEAD:main && exit 0
+            done
+            exit 1
+          fi
